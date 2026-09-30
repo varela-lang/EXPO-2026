@@ -1,0 +1,6 @@
+{
+  "name": "Expo Investment",
+  "description": "Mercado de inversión virtual y customer tokens para Expo de Logros estudiantil.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
