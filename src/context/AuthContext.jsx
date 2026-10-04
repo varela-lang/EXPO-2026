@@ -35,7 +35,6 @@ export function AuthProvider({ children }) {
       const state = mockStore.getState();
       let mockProf = state.profiles.find((p) => p.id === userId);
       if (!mockProf) {
-        // Create demo profile on the fly if needed
         mockProf = {
           id: userId,
           full_name: 'Visitante Expo',
@@ -74,7 +73,6 @@ export function AuthProvider({ children }) {
       }
 
       if (!data) {
-        // Profile not created yet by trigger, fallback to temporary profile
         const mockProf = mockStore.getState().profiles.find((p) => p.id === userId) || {
           id: userId,
           full_name: 'Inversionista',
@@ -98,14 +96,145 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // Single-field login by Visitor Name
+  const loginByName = useCallback(async (fullName) => {
+    if (!fullName || !fullName.trim()) {
+      const err = new Error('Por favor ingresa tu nombre para continuar.');
+      setError(err.message);
+      throw err;
+    }
+
+    setError(null);
+    const cleanName = fullName.trim();
+    const slug =
+      cleanName
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]/g, '_')
+        .slice(0, 30) || 'visitante';
+    const internalEmail = `visitante_${slug}@expo.internal`;
+    const internalPassword = `ExpoVisitor2026!${slug}`;
+
+    // 1. Immediately create or retrieve local mock profile for zero latency
+    let localResult = null;
+    try {
+      localResult = mockStore.loginByName(cleanName);
+    } catch (e) {
+      console.warn('mockStore loginByName warning:', e);
+    }
+
+    // Persist visitor name in localStorage for permanent auto-session
+    try {
+      localStorage.setItem('expo_current_visitor_name', cleanName);
+    } catch (e) {
+      // ignore
+    }
+
+    // 2. If Supabase is not ready, return local profile immediately
+    if (!isSupabaseConfigured || getSupabaseSchemaStatus() === 'missing_tables') {
+      if (localResult) {
+        setUser(localResult.user);
+        setProfile(localResult.profile);
+        return localResult;
+      }
+    }
+
+    // 3. Connect with Supabase
+    try {
+      let supaUser = null;
+
+      // Try signIn first
+      const { data: signInData } = await supabase.auth.signInWithPassword({
+        email: internalEmail,
+        password: internalPassword,
+      });
+
+      if (signInData?.user) {
+        supaUser = signInData.user;
+      } else {
+        // Try signUp
+        const { data: signUpData } = await supabase.auth.signUp({
+          email: internalEmail,
+          password: internalPassword,
+          options: {
+            data: {
+              full_name: cleanName,
+              role: 'visitor',
+            },
+          },
+        });
+
+        if (signUpData?.user) {
+          supaUser = signUpData.user;
+        }
+      }
+
+      if (supaUser) {
+        setUser(supaUser);
+        try {
+          await supabase.from('profiles').upsert(
+            {
+              id: supaUser.id,
+              full_name: cleanName,
+              email: internalEmail,
+              role: 'visitor',
+              balance: 10000.0,
+            },
+            { onConflict: 'id' }
+          );
+        } catch (upsertErr) {
+          console.warn('profiles upsert note:', upsertErr);
+        }
+
+        const prof = await fetchProfile(supaUser.id);
+        const finalProf = prof || localResult?.profile || {
+          id: supaUser.id,
+          full_name: cleanName,
+          email: internalEmail,
+          role: 'visitor',
+          balance: 10000.0,
+        };
+        setProfile(finalProf);
+        return { user: supaUser, profile: finalProf };
+      }
+
+      if (localResult) {
+        setUser(localResult.user);
+        setProfile(localResult.profile);
+        return localResult;
+      }
+    } catch (supaErr) {
+      console.warn('Supabase auth check note, using active local profile:', supaErr);
+      if (localResult) {
+        setUser(localResult.user);
+        setProfile(localResult.profile);
+        return localResult;
+      }
+      throw supaErr;
+    }
+  }, [fetchProfile]);
+
   // Initialize auth state
   useEffect(() => {
     let mounted = true;
 
     async function initAuth() {
       try {
-        let supabaseUser = null;
+        const savedVisitorName =
+          typeof window !== 'undefined' ? localStorage.getItem('expo_current_visitor_name') : null;
 
+        if (savedVisitorName && savedVisitorName.trim()) {
+          try {
+            await loginByName(savedVisitorName.trim());
+            if (mounted) setLoading(false);
+            return;
+          } catch (e) {
+            console.warn('Auto login error:', e);
+          }
+        }
+
+        let supabaseUser = null;
         if (isSupabaseConfigured && supabase) {
           try {
             const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
@@ -121,27 +250,10 @@ export function AuthProvider({ children }) {
           setUser(supabaseUser);
           await fetchProfile(supabaseUser.id);
         } else if (mounted) {
-          // If no active Supabase session, check if there was a mock user session
           const mockUser = mockStore.getCurrentUser();
           if (mockUser) {
             setUser({ id: mockUser.id, email: mockUser.email });
             setProfile(mockUser);
-          } else {
-            // Provide a default visitor account with $10,000 so any visitor arriving at the Expo
-            // can immediately interact and invest in student projects!
-            const defaultVisitor = mockStore.getState().profiles.find((p) => p.role === 'visitor') || {
-              id: 'visitor-default-id',
-              full_name: 'Inversionista Invitado',
-              email: 'invitado@expo.com',
-              role: 'visitor',
-              balance: 10000.0,
-              created_at: new Date().toISOString(),
-            };
-            if (!mockStore.getState().profiles.some((p) => p.id === defaultVisitor.id)) {
-              mockStore.getState().profiles.push(defaultVisitor);
-            }
-            setUser({ id: defaultVisitor.id, email: defaultVisitor.email });
-            setProfile(defaultVisitor);
           }
         }
 
@@ -152,15 +264,6 @@ export function AuthProvider({ children }) {
             if (session?.user) {
               setUser(session.user);
               await fetchProfile(session.user.id);
-            } else {
-              const mockUser = mockStore.getCurrentUser();
-              if (mockUser) {
-                setUser({ id: mockUser.id, email: mockUser.email });
-                setProfile(mockUser);
-              } else {
-                setUser(null);
-                setProfile(null);
-              }
             }
             setLoading(false);
           });
@@ -181,105 +284,14 @@ export function AuthProvider({ children }) {
     return () => {
       mounted = false;
     };
-  }, [fetchProfile]);
+  }, [fetchProfile, loginByName]);
 
-  // Register
+  // Register (legacy fallback if needed)
   const register = async ({ full_name, email, password, role = 'visitor' }) => {
-    setError(null);
-
-    // Always create in mockStore for instant availability
-    let localResult = null;
-    try {
-      localResult = mockStore.registerUser({
-        full_name,
-        email,
-        password,
-        role,
-      });
-    } catch {
-      // User might already exist in mockStore
-    }
-
-    if (!isSupabaseConfigured || getSupabaseSchemaStatus() === 'missing_tables') {
-      if (localResult) {
-        setUser(localResult.user);
-        setProfile(localResult.profile);
-        return localResult;
-      }
-      const existing = mockStore.loginUser({ email, password });
-      setUser(existing.user);
-      setProfile(existing.profile);
-      return existing;
-    }
-
-    try {
-      const { data, error: signUpErr } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name,
-            role,
-          },
-        },
-      });
-
-      if (signUpErr) {
-        if (isSchemaMissingError(signUpErr)) {
-          markSupabaseSchemaMissing('signUp: ' + signUpErr.message);
-          if (localResult) {
-            setUser(localResult.user);
-            setProfile(localResult.profile);
-            return localResult;
-          }
-        }
-        throw signUpErr;
-      }
-
-      // If email confirmation is disabled on Supabase, attempt immediate login
-      if (data.user && !data.session) {
-        try {
-          const { data: signInData } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-          });
-          if (signInData?.session) {
-            setUser(signInData.user);
-            const prof = await fetchProfile(signInData.user.id);
-            return { user: signInData.user, profile: prof || localResult?.profile };
-          }
-        } catch {
-          // Email confirmation is on, continue with local session sync
-        }
-      }
-
-      if (data.user) {
-        setUser(data.user);
-        await new Promise((r) => setTimeout(r, 600));
-        const prof = await fetchProfile(data.user.id);
-        return { user: data.user, profile: prof || localResult?.profile };
-      }
-
-      if (localResult) {
-        setUser(localResult.user);
-        setProfile(localResult.profile);
-        return localResult;
-      }
-
-      return data;
-    } catch (err) {
-      if (localResult) {
-        console.warn('Supabase signup notice, proceeding with active local profile:', err.message);
-        setUser(localResult.user);
-        setProfile(localResult.profile);
-        return localResult;
-      }
-      setError(err.message || 'Error en el registro');
-      throw err;
-    }
+    return loginByName(full_name);
   };
 
-  // Login
+  // Login (email & password fallback for admin/teams)
   const login = async ({ email, password }) => {
     setError(null);
 
@@ -305,7 +317,6 @@ export function AuthProvider({ children }) {
       });
 
       if (signInErr) {
-        // If credentials failed on Supabase, test if it matches demo credentials
         try {
           const demoResult = mockStore.loginUser({ email, password });
           setUser(demoResult.user);
@@ -332,6 +343,12 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     setError(null);
     mockStore.logoutUser();
+
+    try {
+      localStorage.removeItem('expo_current_visitor_name');
+    } catch (e) {
+      // ignore
+    }
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -373,6 +390,7 @@ export function AuthProvider({ children }) {
 
     state.currentUser = { id: targetProfile.id, email: targetProfile.email, role: targetProfile.role };
     localStorage.setItem('expo_investment_mock_db_v1', JSON.stringify(state));
+    localStorage.setItem('expo_current_visitor_name', targetProfile.full_name);
     setUser({ id: targetProfile.id, email: targetProfile.email });
     setProfile(targetProfile);
   };
@@ -382,6 +400,7 @@ export function AuthProvider({ children }) {
     profile,
     loading,
     error,
+    loginByName,
     login,
     register,
     logout,

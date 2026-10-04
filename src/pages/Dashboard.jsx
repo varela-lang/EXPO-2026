@@ -31,6 +31,16 @@ export function Dashboard() {
   const [highlightedProjectId, setHighlightedProjectId] = useState(null);
   const containerRef = useRef(null);
 
+  const sortRanking = (items) => {
+    return [...items].sort((a, b) => {
+      const diffInvested = Number(b.investment_total || 0) - Number(a.investment_total || 0);
+      if (diffInvested !== 0) return diffInvested;
+      const diffTokens = Number(b.customer_tokens || 0) - Number(a.customer_tokens || 0);
+      if (diffTokens !== 0) return diffTokens;
+      return Number(b.investors || 0) - Number(a.investors || 0);
+    });
+  };
+
   // Fetch initial stats
   const fetchStats = async () => {
     try {
@@ -62,7 +72,7 @@ export function Dashboard() {
             };
           });
 
-          mergedRanking.sort((a, b) => Number(b.investment_total || 0) - Number(a.investment_total || 0));
+          const sortedMerged = sortRanking(mergedRanking);
 
           return {
             ...data,
@@ -72,7 +82,7 @@ export function Dashboard() {
               Number(data.total_customer_tokens || 0),
               Number(prev.total_customer_tokens || 0)
             ),
-            ranking: mergedRanking,
+            ranking: sortedMerged,
           };
         });
       }
@@ -125,14 +135,14 @@ export function Dashboard() {
           return proj;
         });
 
-        // Re-sort ranking by total investment
-        updatedRanking.sort((a, b) => (Number(b.investment_total) || 0) - (Number(a.investment_total) || 0));
+        // Re-sort ranking by total investment and tokens
+        const sorted = sortRanking(updatedRanking);
 
         return {
           ...prev,
           total_invested: newTotalInvested,
           total_investors: (prev.total_investors || 0) + 1,
-          ranking: updatedRanking,
+          ranking: sorted,
         };
       });
 
@@ -164,17 +174,19 @@ export function Dashboard() {
           return proj;
         });
 
+        const sorted = sortRanking(updatedRanking);
+
         return {
           ...prev,
           total_customer_tokens: (prev.total_customer_tokens || 0) + 1,
-          ranking: updatedRanking,
+          ranking: sorted,
         };
       });
 
       setTimeout(() => {
         fetchStats();
       }, 1200);
-    } else if (type === 'PROJECT_UPDATE') {
+    } else if (type === 'METRICS_UPDATED' || type === 'PROJECT_UPDATE' || type === 'PASSPORT_STAMP_CLAIMED') {
       fetchStats();
     }
   });
@@ -227,7 +239,7 @@ export function Dashboard() {
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-white">
-                EXPO INVESTMENT
+                RAIZEUP
               </h1>
               {/* LIVE BADGE */}
               <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-black uppercase tracking-widest live-pulse">
@@ -236,7 +248,7 @@ export function Dashboard() {
               </div>
             </div>
             <p className="text-xs sm:text-sm font-semibold tracking-wider text-slate-400 uppercase mt-0.5">
-              MERCADO DE CAPITAL EN TIEMPO REAL • EXPO DE LOGROS
+              TABLERO OFICIAL EN TIEMPO REAL • EXPO RAIZEUP • 8 CIUDADES
             </p>
           </div>
         </div>
@@ -270,33 +282,33 @@ export function Dashboard() {
             <span>CAPITAL INVERTIDO</span>
             <TrendingUp className="w-5 h-5 text-blue-400" />
           </div>
-          <div className="text-4xl sm:text-5xl lg:text-6xl font-black font-mono tracking-tight text-white mb-1">
+          <div className="text-3xl sm:text-5xl lg:text-6xl font-black font-mono tracking-tight text-white mb-1">
             ${Number(stats.total_invested || 0).toLocaleString()}
           </div>
           <p className="text-xs text-slate-400 font-medium">Asignado por el público visitante</p>
         </div>
 
         {/* TOTAL INVESTORS */}
-        <div className="relative overflow-hidden rounded-3xl bg-[#0D192A]/90 p-6 sm:p-8 border border-emerald-500/30 shadow-2xl backdrop-blur-xl">
+        <div className="relative overflow-hidden rounded-3xl bg-[#0D192A]/90 p-5 sm:p-8 border border-emerald-500/30 shadow-2xl backdrop-blur-xl">
           <div className="absolute top-0 right-0 w-36 h-36 bg-gradient-to-bl from-emerald-600/20 to-transparent rounded-bl-full pointer-events-none" />
           <div className="flex items-center justify-between text-xs font-bold text-emerald-400 uppercase tracking-widest mb-2">
             <span>INVERSIONISTAS</span>
             <Users className="w-5 h-5 text-emerald-400" />
           </div>
-          <div className="text-4xl sm:text-5xl lg:text-6xl font-black font-mono tracking-tight text-emerald-400 mb-1">
+          <div className="text-3xl sm:text-5xl lg:text-6xl font-black font-mono tracking-tight text-emerald-400 mb-1">
             {Number(stats.total_investors || 0).toLocaleString()}
           </div>
           <p className="text-xs text-slate-400 font-medium">Asistentes que han respaldado proyectos</p>
         </div>
 
         {/* TOTAL CUSTOMER TOKENS */}
-        <div className="relative overflow-hidden rounded-3xl bg-[#0D192A]/90 p-6 sm:p-8 border border-rose-500/30 shadow-2xl backdrop-blur-xl">
+        <div className="relative overflow-hidden rounded-3xl bg-[#0D192A]/90 p-5 sm:p-8 border border-rose-500/30 shadow-2xl backdrop-blur-xl">
           <div className="absolute top-0 right-0 w-36 h-36 bg-gradient-to-bl from-rose-600/20 to-transparent rounded-bl-full pointer-events-none" />
           <div className="flex items-center justify-between text-xs font-bold text-rose-400 uppercase tracking-widest mb-2">
             <span>CUSTOMER TOKENS</span>
             <Heart className="w-5 h-5 fill-rose-500 text-rose-400" />
           </div>
-          <div className="text-4xl sm:text-5xl lg:text-6xl font-black font-mono tracking-tight text-rose-400 mb-1">
+          <div className="text-3xl sm:text-5xl lg:text-6xl font-black font-mono tracking-tight text-rose-400 mb-1">
             {Number(stats.total_customer_tokens || 0).toLocaleString()}
           </div>
           <p className="text-xs text-slate-400 font-medium">Validaciones comerciales otorgadas</p>
@@ -311,7 +323,7 @@ export function Dashboard() {
             <div className="flex items-center gap-2">
               <Award className="w-5 h-5 text-amber-400" />
               <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-wider">
-                Ranking de Proyectos
+                Ranking de Proyectos (8 Ciudades)
               </h2>
             </div>
             <span className="text-xs text-slate-400 font-medium">
@@ -358,10 +370,16 @@ export function Dashboard() {
                       </div>
 
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight">
                             {isFirst ? '🚀 ' : ''}{project.name}
                           </h3>
+                          {project.city && (
+                            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-900 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                              <span>{project.country_code || '📍'}</span>
+                              <span>{project.city}</span>
+                            </span>
+                          )}
                           <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-900 text-slate-400 border border-white/5">
                             {project.category || 'Proyecto'}
                           </span>
@@ -373,7 +391,7 @@ export function Dashboard() {
                     </div>
 
                     {/* Stats metrics */}
-                    <div className="flex items-center gap-4 sm:gap-6 justify-between sm:justify-end">
+                    <div className="flex flex-wrap items-center gap-3 sm:gap-6 justify-between sm:justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-white/5">
                       {/* Investors count */}
                       <div className="text-right">
                         <span className="text-[11px] font-medium text-slate-400 block">

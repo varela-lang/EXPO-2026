@@ -57,10 +57,10 @@ export function Navbar() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-extrabold text-base md:text-lg tracking-tight text-white group-hover:text-blue-300 transition-colors">
-                      Expo Investment
+                      RaizeUp
                     </span>
                     <span className="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 hidden sm:inline-block">
-                      Expo de Logros
+                      Expo 2026
                     </span>
                   </div>
                 </div>
@@ -230,16 +230,10 @@ export function Navbar() {
                 <div className="flex items-center gap-2">
                   <Link
                     to="/login"
-                    className="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-white/5 transition-colors"
+                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/20 transition-all flex items-center gap-1.5"
                   >
-                    Iniciar Sesión
-                  </Link>
-                  <Link
-                    to="/registro"
-                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/25 transition-all flex items-center gap-1.5"
-                  >
-                    <UserPlus className="w-3.5 h-3.5" />
-                    Registrarme ($10,000)
+                    <span>Ingresar mi nombre</span>
+                    <TrendingUp className="w-3.5 h-3.5" />
                   </Link>
                 </div>
               )}
@@ -331,22 +325,15 @@ export function Navbar() {
                 </button>
               </>
             ) : (
-              <div className="pt-2 grid grid-cols-2 gap-2">
-                <Link
-                  to="/login"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="py-2.5 text-center rounded-xl bg-slate-800 text-xs font-semibold text-slate-200"
-                >
-                  Iniciar Sesión
-                </Link>
-                <Link
-                  to="/registro"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="py-2.5 text-center rounded-xl bg-blue-600 text-xs font-bold text-white shadow-md shadow-blue-600/30"
-                >
-                  Registro ($10k)
-                </Link>
-              </div>
+                <div className="pt-2">
+                  <Link
+                    to="/login"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="w-full block py-3 text-center rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white shadow-md shadow-blue-600/20"
+                  >
+                    Ingresar con mi nombre ($10,000)
+                  </Link>
+                </div>
             )}
 
             <div className="pt-2 border-t border-white/5">

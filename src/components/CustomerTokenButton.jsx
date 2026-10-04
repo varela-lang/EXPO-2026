@@ -96,8 +96,8 @@ export function CustomerTokenButton({ project, hasGivenToken, onTokenGiven }) {
 
       {/* Confirmation Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in">
-          <div className="relative w-full max-w-sm overflow-hidden rounded-3xl bg-[#0D192A] border border-rose-500/30 p-6 md:p-7 text-center shadow-2xl shadow-rose-950/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in">
+          <div className="relative w-full max-w-sm max-h-[92vh] overflow-y-auto rounded-3xl bg-[#0D192A] border border-rose-500/30 p-6 md:p-7 text-center shadow-2xl shadow-rose-950/40">
             {/* Close */}
             <button
               onClick={() => setIsModalOpen(false)}

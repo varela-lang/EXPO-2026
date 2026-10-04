@@ -17,6 +17,7 @@ import {
   X,
   Compass,
   Zap,
+  User,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useAuth } from '../hooks/useAuth';
@@ -25,10 +26,15 @@ import { getPassport, claimPassportStamp, revealPassportToken } from '../service
 import { Loading } from '../components/Loading';
 
 export function Passport() {
-  const { user, profile } = useAuth();
+  const { user, profile, loginByName } = useAuth();
   const [searchParams] = useSearchParams();
   const [passport, setPassport] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // Visitor quick-login on this page if not yet identified
+  const [visitorNameInput, setVisitorNameInput] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState(null);
 
   // Modals & User interaction states
   const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
@@ -40,9 +46,9 @@ export function Passport() {
   // Success stamp revelation modal
   const [unlockedStamp, setUnlockedStamp] = useState(null);
 
-  // Prize revelation state
+  // Prize revelation state & modal
   const [revealingPrize, setRevealingPrize] = useState(false);
-  const [prizeResult, setPrizeResult] = useState(null);
+  const [prizeResultModal, setPrizeResultModal] = useState(null);
 
   const loadData = async () => {
     if (!user?.id) {
@@ -79,6 +85,24 @@ export function Passport() {
     }
   });
 
+  const handleQuickVisitorLogin = async (e) => {
+    e.preventDefault();
+    if (!visitorNameInput.trim()) {
+      setLoginError('Ingresa tu nombre para comenzar.');
+      return;
+    }
+    setLoginLoading(true);
+    setLoginError(null);
+    try {
+      await loginByName(visitorNameInput.trim());
+      await loadData();
+    } catch (err) {
+      setLoginError(err.message || 'Error al iniciar sesión.');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
   const handleClaimStamp = async (e) => {
     if (e) e.preventDefault();
     if (!inputCode.trim()) {
@@ -95,13 +119,13 @@ export function Passport() {
       // Celebration effect
       try {
         confetti({
-          particleCount: 100,
-          spread: 80,
+          particleCount: 90,
+          spread: 75,
           origin: { y: 0.6 },
           colors: ['#2563EB', '#38BDF8', '#10B981', '#F59E0B'],
         });
       } catch (err) {
-        console.error(err);
+        // ignore
       }
 
       setIsCodeModalOpen(false);
@@ -122,18 +146,18 @@ export function Passport() {
 
     try {
       const res = await revealPassportToken(user.id);
-      setPrizeResult(res);
+      setPrizeResultModal(res);
 
       if (res.has_prize) {
         try {
           confetti({
-            particleCount: 150,
-            spread: 90,
+            particleCount: 140,
+            spread: 85,
             origin: { y: 0.5 },
-            colors: ['#F59E0B', '#EF4444', '#10B981', '#3B82F6'],
+            colors: ['#F59E0B', '#10B981', '#38BDF8', '#EC4899'],
           });
         } catch (err) {
-          console.error(err);
+          // ignore
         }
       }
       await loadData();
@@ -145,117 +169,138 @@ export function Passport() {
   };
 
   if (loading) {
-    return <Loading message="Abriendo tu Pasaporte Virtual..." />;
+    return <Loading message="Cargando Pasaporte..." />;
   }
 
+  // Not logged in: Show simple, clean on-the-spot name entrance
   if (!user) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-16 text-center">
-        <div className="w-16 h-16 rounded-3xl bg-blue-600/10 border border-blue-500/20 text-blue-400 flex items-center justify-center mx-auto mb-4">
-          <Globe className="w-8 h-8" />
-        </div>
-        <h2 className="text-2xl font-black text-white mb-2">Pasaporte de Ciudades</h2>
-        <p className="text-sm text-slate-300 mb-6">
-          Inicia sesión o regístrate como visitante para obtener tu Pasaporte Virtual de la Expo, coleccionar sellos de cada ciudad y desbloquear tu Token Final con premios.
-        </p>
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            to="/registro"
-            className="w-full sm:w-auto py-3 px-6 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-xl shadow-blue-600/30 transition-all"
-          >
-            Registrarme y Obtener Pasaporte
-          </Link>
-          <Link
-            to="/login"
-            className="w-full sm:w-auto py-3 px-6 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-white/10 font-semibold text-xs"
-          >
-            Iniciar Sesión
-          </Link>
+      <div className="max-w-md mx-auto px-4 py-16 text-center">
+        <div className="rounded-2xl bg-[#0B1524] border border-slate-800 p-7 shadow-xl shadow-black/40">
+          <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center mx-auto mb-4">
+            <Globe className="w-7 h-7" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-1">Pasaporte RaizeUp</h2>
+          <p className="text-xs text-slate-400 mb-6">
+            Colecciona los 8 sellos de cada ciudad de la Expo RaizeUp y desbloquea tu Token Final.
+          </p>
+
+          {loginError && (
+            <div className="mb-4 p-3 rounded-xl bg-red-950/40 border border-red-800/40 text-red-300 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{loginError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleQuickVisitorLogin} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2 text-left">
+                ¿Cuál es tu nombre?
+              </label>
+              <input
+                type="text"
+                autoFocus
+                required
+                placeholder="Ej. Sergio"
+                value={visitorNameInput}
+                onChange={(e) => setVisitorNameInput(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white text-base placeholder:text-slate-600 focus:outline-none focus:border-blue-500 shadow-inner"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loginLoading || !visitorNameInput.trim()}
+              className="w-full py-3.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
+            >
+              {loginLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Abriendo pasaporte...</span>
+                </>
+              ) : (
+                <>
+                  <span>OBTENER MI PASAPORTE</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </form>
         </div>
       </div>
     );
   }
 
   const visitedCount = passport?.visitedCount || 0;
-  const totalCount = passport?.totalCount || 0;
+  const totalCount = passport?.totalCount || 8;
   const percentage = passport?.percentage || 0;
   const isCompleted = passport?.isCompleted || false;
   const token = passport?.token;
 
   return (
-    <div className="min-h-screen bg-[#07111F] text-slate-100 py-8 sm:py-12 px-4 sm:px-6 lg:px-8 selection:bg-blue-500/30">
-      <div className="max-w-5xl mx-auto space-y-8">
-        {/* PASSPORT TOP EMBEDDED COVER & BADGE */}
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0B1528] via-[#0D192A] to-[#07111F] border border-blue-500/30 p-6 sm:p-10 shadow-2xl shadow-blue-950/60">
-          <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/10 rounded-full blur-[100px] pointer-events-none" />
-          <div className="absolute -bottom-10 -left-10 w-80 h-80 bg-emerald-500/10 rounded-full blur-[100px] pointer-events-none" />
-
-          {/* Futuristic Gold Passport Stamp watermark */}
-          <div className="absolute -right-6 -bottom-6 w-52 h-52 rounded-full border-4 border-amber-500/10 flex items-center justify-center pointer-events-none rotate-12">
-            <Globe className="w-36 h-36 text-amber-500/10" />
-          </div>
-
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-white/10">
+    <div className="min-h-screen bg-[#07111F] text-slate-100 py-6 sm:py-10 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-5xl mx-auto space-y-6">
+        {/* PASSPORT TOP HEADER */}
+        <div className="relative overflow-hidden rounded-2xl bg-[#0B1524] border border-slate-800 p-6 sm:p-8 shadow-xl shadow-black/30">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-slate-800/80">
             {/* Identity */}
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-tr from-amber-500 to-blue-600 p-0.5 shadow-xl shadow-blue-600/20 shrink-0">
-                <div className="w-full h-full bg-[#07111F] rounded-[14px] flex items-center justify-center">
-                  <Globe className="w-8 h-8 sm:w-10 sm:h-10 text-amber-400" />
-                </div>
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0 text-blue-400">
+                <Globe className="w-7 h-7 sm:w-8 sm:h-8" />
               </div>
 
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300">
-                    PASAPORTE OFICIAL 2026
+                  <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                    PASAPORTE OFICIAL
                   </span>
-                  <span className="text-[10px] font-mono font-semibold text-slate-400 uppercase">
-                    ID: {profile?.id?.substring(0, 8)}
+                  <span className="text-[10px] font-mono text-slate-400">
+                    EXPO RAIZEUP
                   </span>
                 </div>
-                <h1 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
-                  {profile?.full_name || 'Visitante Expo'}
+                <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+                  {profile?.full_name || 'Visitante'}
                 </h1>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Recorrido por los stands y centros de innovación internacional
+                <p className="text-xs text-slate-400">
+                  Explora las 8 ciudades y colecciona los sellos de cada stand
                 </p>
               </div>
             </div>
 
             {/* Action buttons */}
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-3">
               <button
                 onClick={() => setIsCodeModalOpen(true)}
-                className="py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-600/30 flex items-center gap-2 transition-all hover:scale-[1.02]"
+                className="py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs shadow-md shadow-blue-600/20 flex items-center gap-2 transition-all active:scale-95"
               >
                 <KeyRound className="w-4 h-4" />
-                Ingresar Código
+                <span>INGRESAR CÓDIGO</span>
               </button>
               <button
                 onClick={() => setIsQrModalOpen(true)}
-                className="py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-white/10 font-semibold text-xs flex items-center gap-2 transition-colors"
+                className="py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 font-medium text-xs flex items-center gap-2 transition-colors"
               >
                 <QrCode className="w-4 h-4 text-blue-400" />
-                Escanear QR
+                <span>ESCANEAR QR</span>
               </button>
             </div>
           </div>
 
-          {/* PROGRESS STRIP */}
-          <div className="pt-6 relative z-10">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                <Compass className="w-4 h-4 text-amber-400" />
-                Progreso del Recorrido Mundial
+          {/* PROGRESS BAR */}
+          <div className="pt-5">
+            <div className="flex items-center justify-between text-xs mb-2">
+              <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                <Compass className="w-4 h-4 text-blue-400" />
+                Progreso del Pasaporte
               </span>
-              <span className="text-sm font-black font-mono text-amber-300">
-                {visitedCount} / {totalCount} Ciudades ({percentage}%)
+              <span className="font-mono font-bold text-white">
+                {visitedCount} / {totalCount} ciudades ({percentage}%)
               </span>
             </div>
 
-            <div className="w-full h-3.5 rounded-full bg-slate-900 border border-white/10 overflow-hidden p-0.5">
+            <div className="w-full h-3 rounded-full bg-slate-900 border border-slate-800 overflow-hidden">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-blue-600 via-sky-400 to-amber-400 transition-all duration-700 shadow-md shadow-amber-400/20"
+                className="h-full rounded-full bg-blue-500 transition-all duration-500"
                 style={{ width: `${Math.max(percentage, 4)}%` }}
               />
             </div>
@@ -264,64 +309,63 @@ export function Passport() {
 
         {/* FINAL TOKEN COMPLETION BANNER */}
         {isCompleted && (
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-500/20 via-[#0D192A] to-emerald-500/20 border-2 border-amber-500/50 p-6 sm:p-8 shadow-2xl backdrop-blur-xl animate-in zoom-in-95 duration-500">
+          <div className="relative overflow-hidden rounded-2xl bg-[#0B1524] border border-blue-500/40 p-6 sm:p-7 shadow-xl shadow-blue-950/20">
             <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="flex items-center gap-4 text-center md:text-left">
-                <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center shrink-0">
-                  <Gift className="w-7 h-7" />
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-widest mb-1.5">
+                  <Sparkles className="w-3 h-3" />
+                  🎉 ¡PASAPORTE COMPLETADO!
                 </div>
-                <div>
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-black uppercase tracking-widest mb-1">
-                    <Sparkles className="w-3 h-3" />
-                    ¡PASAPORTE COMPLETADO!
-                  </div>
-                  <h2 className="text-xl sm:text-2xl font-black text-white">
-                    Has recorrido todas las ciudades de Expo Investment
-                  </h2>
-                  <p className="text-xs text-slate-300 mt-1 max-w-xl">
-                    Tu viaje ha terminado... pero todavía hay una sorpresa especial asignada en tu Token Final único.
-                  </p>
-                </div>
+                <h2 className="text-lg sm:text-xl font-bold text-white">
+                  Has recorrido las 8 ciudades de la Expo RaizeUp.
+                </h2>
+                <p className="text-xs text-slate-400 mt-1 max-w-xl">
+                  Tu viaje ha terminado... pero todavía hay una sorpresa.
+                </p>
               </div>
 
               {/* Final Token & Prize Reveal Box */}
-              <div className="w-full md:w-auto p-4 rounded-2xl bg-slate-950/80 border border-amber-500/40 text-center min-w-[240px]">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                  Tu Token Final
-                </span>
-                <span className="text-lg font-black font-mono text-amber-300 block mb-3">
-                  {token?.token_code || 'TOKEN #X7K92P'}
+              <div className="w-full md:w-auto p-4 rounded-xl bg-slate-900 border border-slate-700 text-center min-w-[240px]">
+                <div className="flex items-center justify-center gap-1.5 text-xs text-slate-400 font-medium mb-1">
+                  <Lock className="w-3.5 h-3.5 text-blue-400" />
+                  <span>TOKEN FINAL</span>
+                </div>
+                <span className="text-lg font-bold font-mono text-white block mb-3">
+                  {token?.token_code || '#EXPO-8K29'}
                 </span>
 
                 {token?.revealed ? (
                   token.has_prize && token.prize ? (
-                    <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs">
-                      <span className="font-bold block text-[11px] uppercase tracking-wider text-amber-400">
-                        🎉 ¡Premio Desbloqueado!
+                    <div className="p-3 rounded-lg bg-emerald-950/40 border border-emerald-800/40 text-emerald-300 text-xs">
+                      <span className="font-bold block text-[11px] text-emerald-400 uppercase tracking-wide">
+                        🎁 ¡PREMIO GANADO!
                       </span>
                       <strong className="text-white text-sm block mt-0.5">{token.prize.name}</strong>
-                      <span className="text-[11px] text-slate-300 block">{token.prize.description}</span>
+                      <span className="text-[11px] text-slate-400 block mt-0.5">{token.prize.description}</span>
                     </div>
                   ) : (
-                    <div className="p-2.5 rounded-xl bg-slate-900 border border-white/10 text-slate-300 text-xs font-semibold">
-                      🌎 ¡Gracias por participar en la Expo!
+                    <div className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-300 text-xs">
+                      🌎 Token sin premio · ¡Gracias por completar el recorrido!
                     </div>
                   )
                 ) : (
-                  <button
-                    onClick={handleRevealPrize}
-                    disabled={revealingPrize}
-                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/30 flex items-center justify-center gap-2 transition-all"
-                  >
-                    {revealingPrize ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <>
-                        <Gift className="w-4 h-4" />
-                        Descubrir Premio
-                      </>
-                    )}
-                  </button>
+                  <div>
+                    <span className="text-[11px] text-slate-400 block mb-2">¿Qué ganaste?</span>
+                    <button
+                      onClick={handleRevealPrize}
+                      disabled={revealingPrize}
+                      className="w-full py-2.5 px-4 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5"
+                    >
+                      {revealingPrize ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Gift className="w-4 h-4" />
+                          <span>DESCUBRIR</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -332,102 +376,84 @@ export function Passport() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-wider flex items-center gap-2">
-                <span>Colección de Sellos</span>
-                <span className="text-xs font-semibold text-slate-400 normal-case">
-                  (Visita cada stand e ingresa su código)
-                </span>
+              <h2 className="text-base sm:text-lg font-bold text-white uppercase tracking-wider">
+                Ciudades y Stands
               </h2>
             </div>
             <span className="text-xs text-slate-400 font-mono">
-              {visitedCount} sellados
+              {visitedCount} / {totalCount} selladas
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {(passport?.cities || []).map((city) => {
               const isUnlocked = city.unlocked;
 
               return (
                 <div
                   key={city.id}
-                  className={`group relative overflow-hidden rounded-2xl border p-5 transition-all duration-300 ${
+                  className={`relative overflow-hidden rounded-xl border p-4 transition-colors ${
                     isUnlocked
-                      ? 'bg-gradient-to-br from-[#0D192A] to-blue-950/40 border-amber-500/40 shadow-xl shadow-amber-500/5'
-                      : 'bg-[#0D192A]/60 border-white/5 opacity-85 hover:opacity-100 hover:border-white/20'
+                      ? 'bg-[#0B1524] border-slate-700 shadow-md'
+                      : 'bg-[#08101C] border-slate-800/80 opacity-80'
                   }`}
                 >
-                  {/* Digital Stamp Seal Overlay if unlocked */}
-                  {isUnlocked && (
-                    <div className="absolute -top-3 -right-3 w-24 h-24 rounded-full border-2 border-dashed border-amber-400/30 flex items-center justify-center pointer-events-none rotate-12">
-                      <div className="w-20 h-20 rounded-full border border-amber-400/40 flex flex-col items-center justify-center text-[9px] font-black uppercase text-amber-400 tracking-tighter bg-amber-500/5">
-                        <span>EXPO</span>
-                        <span>VISITED</span>
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 mt-0.5" />
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex items-start justify-between mb-3 relative z-10">
+                  <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-2.5">
-                      <span className="text-2xl shrink-0" role="img" aria-label={city.country}>
+                      <span className="text-2xl" role="img" aria-label={city.country}>
                         {city.country_code || '📍'}
                       </span>
                       <div>
-                        <h3 className="text-lg font-bold text-white group-hover:text-blue-300 transition-colors">
+                        <h3 className="text-base font-bold text-white">
                           {city.city}
                         </h3>
-                        <span className="text-xs text-slate-400 font-medium block">
+                        <span className="text-xs text-slate-400 font-normal block">
                           {city.country}
                         </span>
                       </div>
                     </div>
 
-                    <div className="shrink-0">
+                    <div>
                       {isUnlocked ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-black uppercase tracking-wider">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
                           <CheckCircle2 className="w-3 h-3" />
                           SELLADO
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-900 border border-white/10 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-                          <Lock className="w-3 h-3 text-slate-500" />
-                          BLOQUEADO
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-500 text-[10px] font-medium uppercase tracking-wider">
+                          <Lock className="w-3 h-3" />
+                          PENDIENTE
                         </span>
                       )}
                     </div>
                   </div>
 
-                  <div className="mb-4 relative z-10">
-                    <span className="text-xs font-semibold text-blue-400 block mb-0.5">
-                      Stand: {city.name}
+                  <div className="mb-3">
+                    <span className="text-xs font-medium text-blue-400 block mb-0.5">
+                      Equipo: {city.name}
                     </span>
-                    <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                    <p className="text-xs text-slate-400 line-clamp-2">
                       {city.description}
                     </p>
                   </div>
 
-                  {/* Stamp Card Bottom Status */}
-                  <div className="pt-3 border-t border-white/5 flex items-center justify-between text-xs relative z-10">
+                  <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
                     {isUnlocked ? (
-                      <div className="flex items-center gap-1.5 text-emerald-400 text-[11px] font-medium">
-                        <Calendar className="w-3.5 h-3.5" />
-                        <span>
-                          {city.stamped_at ? new Date(city.stamped_at).toLocaleDateString() : 'Visitada'}
-                        </span>
-                      </div>
+                      <span className="text-emerald-400 text-[11px] font-medium flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" />
+                        Sello obtenido
+                      </span>
                     ) : (
-                      <span className="text-[11px] text-slate-500 flex items-center gap-1">
-                        <Lock className="w-3 h-3" />
-                        Visita el stand para obtener el sello
+                      <span className="text-slate-500 text-[11px]">
+                        Sello pendiente (visita el stand)
                       </span>
                     )}
 
                     <Link
                       to={`/proyecto/${city.id}`}
-                      className="text-xs font-bold text-blue-400 hover:text-white flex items-center gap-1 transition-colors"
+                      className="text-xs font-medium text-blue-400 hover:text-blue-300 flex items-center gap-1"
                     >
-                      Ver Stand
+                      <span>Ver Stand</span>
                       <ArrowRight className="w-3 h-3" />
                     </Link>
                   </div>
@@ -440,30 +466,30 @@ export function Passport() {
 
       {/* MODAL 1: ENTER CITY CODE */}
       {isCodeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-[#0D192A] border border-blue-500/30 p-6 sm:p-8 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm">
+          <div className="relative w-full max-w-md max-h-[92vh] overflow-y-auto rounded-2xl bg-[#0B1524] border border-slate-800 p-5 sm:p-7 shadow-2xl">
             <button
               onClick={() => {
                 setIsCodeModalOpen(false);
                 setCodeError(null);
               }}
-              className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-white hover:bg-white/5"
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center mb-4">
-              <KeyRound className="w-6 h-6" />
+            <div className="w-11 h-11 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center mb-3">
+              <KeyRound className="w-5 h-5" />
             </div>
 
-            <h3 className="text-xl font-bold text-white mb-1">Ingresar Código de Ciudad</h3>
-            <p className="text-xs text-slate-300 mb-6">
-              Cada equipo/stand de la Expo tiene un código de pasaporte visible en su mesa o tarjeta. Ingresa el código para registrar tu sello.
+            <h3 className="text-lg font-bold text-white mb-1">Ingresar Código de Ciudad</h3>
+            <p className="text-xs text-slate-400 mb-5">
+              Ingresa el código alfanumérico visible en el stand del equipo.
             </p>
 
             {codeError && (
-              <div className="p-3 mb-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
+              <div className="p-3 mb-4 rounded-xl bg-red-950/40 border border-red-800/40 text-red-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
                 <span>{codeError}</span>
               </div>
             )}
@@ -471,51 +497,53 @@ export function Passport() {
             <form onSubmit={handleClaimStamp} className="space-y-4">
               <div>
                 <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block mb-1.5">
-                  Código del Stand (ej. TOK-92XM, NYC-7K4P)
+                  Código (ej. TOK-92XM, NYC-7K4P)
                 </label>
                 <input
                   type="text"
                   value={inputCode}
                   onChange={(e) => setInputCode(e.target.value.toUpperCase())}
                   placeholder="TOK-92XM"
-                  className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-white/10 text-white font-mono font-bold tracking-wider text-center text-lg placeholder:text-slate-600 focus:outline-none focus:border-blue-500"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white font-mono font-bold tracking-wider text-center text-lg placeholder:text-slate-600 focus:outline-none focus:border-blue-500"
                   autoFocus
                 />
               </div>
 
-              {/* Quick test pills for instant validation */}
-              <div className="pt-1">
-                <span className="text-[11px] text-slate-400 block mb-1.5">
-                  Códigos rápidos de prueba de la Expo:
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {['NYC-7K4P', 'TOK-92XM', 'PAR-5L8Q', 'RIO-3F7A', 'LON-8H2M', 'ROM-4P9X'].map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setInputCode(c)}
-                      className="text-[10px] font-mono px-2 py-1 rounded-lg bg-slate-900 text-blue-300 border border-blue-500/20 hover:bg-blue-600 hover:text-white transition-all"
-                    >
-                      {c}
-                    </button>
-                  ))}
+              {/* Only show test codes if logged in as admin */}
+              {profile?.role === 'admin' && (
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-left">
+                  <span className="text-[10px] text-amber-300 font-semibold block mb-1">
+                    Atajo de prueba (Solo Administrador):
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {passport?.cities?.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setInputCode(c.passport_code)}
+                        className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 text-amber-300 border border-amber-500/30 hover:border-amber-400 transition-colors"
+                      >
+                        {c.city}: {c.passport_code}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <div className="pt-3 flex gap-2">
+              <div className="pt-2 flex gap-2">
                 <button
                   type="button"
                   onClick={() => setIsCodeModalOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-semibold border border-white/10"
+                  className="flex-1 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-medium border border-slate-800"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={validating || !inputCode.trim()}
-                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-600/30 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
-                  {validating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Sellar Pasaporte'}
+                  {validating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Obtener Sello'}
                 </button>
               </div>
             </form>
@@ -523,36 +551,34 @@ export function Passport() {
         </div>
       )}
 
-      {/* MODAL 2: QR SCANNER OPTION */}
+      {/* MODAL 2: QR SCANNER INFO */}
       {isQrModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-[#0D192A] border border-blue-500/30 p-6 sm:p-8 text-center shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm">
+          <div className="relative w-full max-w-md max-h-[92vh] overflow-y-auto rounded-2xl bg-[#0B1524] border border-slate-800 p-5 sm:p-7 text-center shadow-2xl">
             <button
               onClick={() => setIsQrModalOpen(false)}
-              className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-white hover:bg-white/5"
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <div className="w-14 h-14 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center mx-auto mb-4">
-              <QrCode className="w-7 h-7" />
+            <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center mx-auto mb-3">
+              <QrCode className="w-6 h-6" />
             </div>
 
-            <h3 className="text-xl font-bold text-white mb-2">Escanear QR de la Ciudad</h3>
-            <p className="text-xs text-slate-300 mb-6 leading-relaxed">
-              En cada mesa de stand encontrarás un código QR con su sello internacional. Puedes escanearlo con la cámara de tu smartphone para abrir directamente la validación.
+            <h3 className="text-lg font-bold text-white mb-1">Escanear Código QR</h3>
+            <p className="text-xs text-slate-400 mb-5 leading-relaxed">
+              Apunta la cámara de tu teléfono al código QR expuesto en el stand para registrar automáticamente el sello de esa ciudad.
             </p>
 
-            <div className="p-4 rounded-2xl bg-slate-900/80 border border-white/10 mb-6">
-              <p className="text-xs text-slate-400 mb-2">
-                ¿Prefieres ingresar el código alfanumérico manualmente?
-              </p>
+            <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 mb-5 text-left text-xs text-slate-300">
+              <p className="mb-2">¿Prefieres ingresar el código manualmente?</p>
               <button
                 onClick={() => {
                   setIsQrModalOpen(false);
                   setIsCodeModalOpen(true);
                 }}
-                className="py-2 px-4 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30 text-xs font-bold hover:bg-blue-600 hover:text-white transition-all"
+                className="w-full py-2 px-3 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30 text-xs font-semibold hover:bg-blue-600 hover:text-white transition-colors"
               >
                 Ingresar Código Manual
               </button>
@@ -560,7 +586,7 @@ export function Passport() {
 
             <button
               onClick={() => setIsQrModalOpen(false)}
-              className="w-full py-2.5 rounded-xl bg-slate-900 text-slate-300 text-xs font-semibold"
+              className="w-full py-2.5 rounded-xl bg-slate-900 text-slate-300 text-xs font-medium border border-slate-800"
             >
               Cerrar
             </button>
@@ -568,41 +594,93 @@ export function Passport() {
         </div>
       )}
 
-      {/* MODAL 3: STAMP UNLOCKED SUCCESS EXPERIENCE */}
+      {/* MODAL 3: STAMP UNLOCKED SUCCESS */}
       {unlockedStamp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in zoom-in-95 duration-300">
-          <div className="relative w-full max-w-sm overflow-hidden rounded-3xl bg-[#0D192A] border-2 border-amber-500/50 p-6 sm:p-8 text-center shadow-2xl shadow-amber-500/20">
-            {/* Holographic decorative ring */}
-            <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-gradient-to-tr from-amber-500 to-emerald-400 p-1 shadow-xl shadow-amber-500/30">
-              <div className="w-full h-full bg-[#07111F] rounded-full flex flex-col items-center justify-center">
-                <span className="text-3xl mb-0.5">{unlockedStamp.country_code || '✈️'}</span>
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in zoom-in-95 duration-200">
+          <div className="relative w-full max-w-sm max-h-[92vh] overflow-y-auto rounded-2xl bg-[#0B1524] border border-blue-500/40 p-5 sm:p-6 text-center shadow-2xl">
+            <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-blue-500/10 border border-blue-500/30 flex flex-col items-center justify-center">
+              <span className="text-2xl">{unlockedStamp.country_code || '📍'}</span>
             </div>
 
-            <span className="inline-block text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 mb-2">
+            <span className="inline-block text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 mb-2">
               SELLO CONSEGUIDO
             </span>
 
-            <h3 className="text-2xl font-black text-white tracking-tight">
+            <h3 className="text-xl font-bold text-white">
               {unlockedStamp.city}
             </h3>
-            <p className="text-xs text-slate-300 font-medium mb-1">
+            <p className="text-xs text-slate-400 mb-1">
               {unlockedStamp.country}
             </p>
-            <p className="text-xs text-blue-400 font-semibold mb-6">
+            <p className="text-xs text-blue-400 font-medium mb-5">
               Stand: {unlockedStamp.project_name}
             </p>
 
-            <div className="p-3 rounded-2xl bg-slate-950/80 border border-white/10 text-xs text-slate-300 mb-6">
-              ✓ Has desbloqueado una nueva ciudad en tu Pasaporte Oficial.
+            <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 mb-5">
+              ✓ Ciudad desbloqueada en tu pasaporte
             </div>
 
             <button
               onClick={() => setUnlockedStamp(null)}
-              className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-600/30 transition-all"
+              className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md transition-colors"
             >
-              Continuar Recorrido
+              Continuar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: PRIZE REVELATION RESULT */}
+      {prizeResultModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in zoom-in-95 duration-200">
+          <div className="relative w-full max-w-sm max-h-[92vh] overflow-y-auto rounded-2xl bg-[#0B1524] border border-slate-700 p-5 sm:p-6 text-center shadow-2xl">
+            <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center">
+              {prizeResultModal.has_prize ? (
+                <Gift className="w-8 h-8 text-emerald-400" />
+              ) : (
+                <Globe className="w-8 h-8 text-blue-400" />
+              )}
+            </div>
+
+            {prizeResultModal.has_prize ? (
+              <>
+                <span className="inline-block text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 mb-2">
+                  🎉 ¡FELICIDADES!
+                </span>
+                <h3 className="text-lg font-bold text-white mb-1">
+                  Has ganado un premio:
+                </h3>
+                <div className="p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-800/40 text-emerald-300 text-xs my-4">
+                  <strong className="text-white text-base block font-bold">
+                    {prizeResultModal.prize?.name}
+                  </strong>
+                  <p className="text-xs text-slate-300 mt-1">
+                    {prizeResultModal.prize?.description}
+                  </p>
+                </div>
+                <p className="text-[11px] text-slate-400 mb-5">
+                  Muestra tu Token <strong className="text-white font-mono">{prizeResultModal.token_code}</strong> en el stand de entrega para reclamarlo.
+                </p>
+              </>
+            ) : (
+              <>
+                <span className="inline-block text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 mb-2">
+                  🌎 ¡FELICIDADES!
+                </span>
+                <h3 className="text-lg font-bold text-white mb-2">
+                  Completaste tu Pasaporte
+                </h3>
+                <p className="text-xs text-slate-300 mb-5 leading-relaxed">
+                  Gracias por recorrer todos los stands de la Expo de Logros. Tu Token registrado es <strong className="text-white font-mono">{prizeResultModal.token_code}</strong>.
+                </p>
+              </>
+            )}
+
+            <button
+              onClick={() => setPrizeResultModal(null)}
+              className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-colors"
+            >
+              Cerrar
             </button>
           </div>
         </div>

@@ -21,11 +21,19 @@ export function ProjectCard({ project, rank }) {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#0D192A] via-[#0D192A]/40 to-transparent" />
 
-        {/* Category Badge & Rank */}
+        {/* Category Badge, City & Rank */}
         <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
-          <span className="text-[11px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-slate-950/70 backdrop-blur-md text-blue-300 border border-blue-400/20">
-            {project.category || 'Proyecto'}
-          </span>
+          <div className="flex items-center gap-1.5">
+            {project.city && (
+              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-slate-950/80 backdrop-blur-md text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                <span>{project.country_code || '📍'}</span>
+                <span>{project.city}</span>
+              </span>
+            )}
+            <span className="text-[11px] font-semibold uppercase tracking-wider px-2 py-1 rounded-full bg-slate-950/80 backdrop-blur-md text-blue-300 border border-blue-400/20">
+              {project.category || 'Proyecto'}
+            </span>
+          </div>
           {rank !== undefined && (
             <span className={`text-xs font-bold px-2 py-0.5 rounded-full backdrop-blur-md border ${
               rank === 1 

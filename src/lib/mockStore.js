@@ -127,6 +127,46 @@ const INITIAL_PROJECTS = [
     investors: 19,
     customer_tokens: 41,
   },
+  {
+    id: '00000000-0000-0000-0000-000000000007',
+    name: 'SolarPulse',
+    description: 'Microrredes fotovoltaicas modulares y almacenamiento energético con gestión predictiva comunitaria.',
+    team_name: 'Solar Energy Labs',
+    category: 'CleanTech',
+    city: 'Berlin',
+    country: 'Alemania',
+    country_code: '🇩🇪',
+    passport_code: 'BER-6W3N',
+    logo_url: 'https://images.unsplash.com/photo-1509391365360-2e959784a276?w=400&auto=format&fit=crop&q=80',
+    active: true,
+    created_at: new Date(Date.now() - 3600000 * 3).toISOString(),
+    base_investment: 11400,
+    base_investors: 38,
+    base_tokens: 72,
+    investment_total: 11400,
+    investors: 38,
+    customer_tokens: 72,
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000008',
+    name: 'CyberGuard',
+    description: 'Escudo cibernético distribuido con IA reactiva para protección de infraestructuras críticas conectadas.',
+    team_name: 'CyberNetix AI',
+    category: 'Ciberseguridad',
+    city: 'Singapore',
+    country: 'Singapur',
+    country_code: '🇸🇬',
+    passport_code: 'SIN-2Y7K',
+    logo_url: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?w=400&auto=format&fit=crop&q=80',
+    active: true,
+    created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
+    base_investment: 16800,
+    base_investors: 54,
+    base_tokens: 89,
+    investment_total: 16800,
+    investors: 54,
+    customer_tokens: 89,
+  },
 ];
 
 const INITIAL_PRIZES = [
@@ -304,6 +344,13 @@ function loadState() {
               : Number(p.customer_tokens || 0),
         };
       });
+
+      // Guarantee that all 8 projects from INITIAL_PROJECTS are included
+      INITIAL_PROJECTS.forEach((initP) => {
+        if (!parsed.projects.some((p) => p.id === initP.id || p.name?.toLowerCase().trim() === initP.name?.toLowerCase().trim())) {
+          parsed.projects.push({ ...initP });
+        }
+      });
     } else {
       parsed.projects = INITIAL_PROJECTS;
     }
@@ -442,6 +489,54 @@ export const mockStore = {
   },
 
   // Auth & Profile
+  loginByName(fullName) {
+    if (!fullName || !fullName.trim()) {
+      throw new Error('Por favor ingresa tu nombre.');
+    }
+    const cleanName = fullName.trim();
+    const state = loadState();
+    const slug = cleanName
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, '_')
+      .slice(0, 30) || 'visitante';
+    const internalEmail = `visitante_${slug}@expo.internal`;
+
+    // Look for existing visitor with this name
+    let profile = state.profiles.find(
+      (p) => p.full_name?.toLowerCase().trim() === cleanName.toLowerCase() && p.role === 'visitor'
+    );
+
+    if (!profile) {
+      const userId = crypto.randomUUID ? crypto.randomUUID() : 'usr-' + slug + '-' + Date.now().toString(36);
+      const initialBalance = 10000.0;
+      profile = {
+        id: userId,
+        full_name: cleanName,
+        email: internalEmail,
+        role: 'visitor',
+        balance: initialBalance,
+        created_at: new Date().toISOString(),
+      };
+      state.profiles.push(profile);
+
+      const initialTx = {
+        id: crypto.randomUUID ? crypto.randomUUID() : 'tx-' + Date.now(),
+        user_id: userId,
+        type: 'initial_balance',
+        amount: initialBalance,
+        description: 'Capital inicial asignado',
+        created_at: new Date().toISOString(),
+      };
+      state.transactions.push(initialTx);
+    }
+
+    state.currentUser = { id: profile.id, email: profile.email, role: profile.role, full_name: profile.full_name };
+    saveState(state);
+    return { user: state.currentUser, profile };
+  },
+
   registerUser({ full_name, email, password, role = 'visitor' }) {
     const state = loadState();
     const existing = state.profiles.find((p) => p.email.toLowerCase() === email.toLowerCase());
@@ -876,21 +971,25 @@ export const mockStore = {
       let token = state.passportTokens.find((t) => t.user_id === userId);
 
       if (!token) {
-        // Generate unique token code (e.g. #X7K92P)
-        finalTokenCode = 'TOKEN #' + (crypto.randomUUID ? crypto.randomUUID().substring(0, 6).toUpperCase() : Math.random().toString(36).substring(2, 8).toUpperCase());
+        // Generate unique token code in requested format #EXPO-XXXX
+        finalTokenCode = '#EXPO-' + (crypto.randomUUID ? crypto.randomUUID().substring(0, 4).toUpperCase() : Math.random().toString(36).substring(2, 6).toUpperCase());
 
-        // Assign prize from available stock
-        const availablePrizes = (state.prizes || []).filter(
-          (p) => p.active !== false && Number(p.quantity) > Number(p.claimed_count || 0)
-        );
-
+        // Safe random prize assignment: 45% chance of being awarded a prize
+        const isPrizeWinner = Math.random() < 0.45;
         let prizeId = null;
-        if (availablePrizes.length > 0) {
-          const randomIndex = Math.floor(Math.random() * availablePrizes.length);
-          const chosenPrize = availablePrizes[randomIndex];
-          prizeId = chosenPrize.id;
-          chosenPrize.claimed_count = Number(chosenPrize.claimed_count || 0) + 1;
-          assignedPrize = chosenPrize;
+
+        if (isPrizeWinner) {
+          const availablePrizes = (state.prizes || []).filter(
+            (p) => p.active !== false && Number(p.quantity) > Number(p.claimed_count || 0)
+          );
+
+          if (availablePrizes.length > 0) {
+            const randomIndex = Math.floor(Math.random() * availablePrizes.length);
+            const chosenPrize = availablePrizes[randomIndex];
+            prizeId = chosenPrize.id;
+            chosenPrize.claimed_count = Number(chosenPrize.claimed_count || 0) + 1;
+            assignedPrize = chosenPrize;
+          }
         }
 
         token = {
@@ -980,7 +1079,9 @@ export const mockStore = {
       token_code: token.token_code,
       has_prize: Boolean(prizeInfo),
       prize: prizeInfo,
-      message: prizeInfo ? `Has ganado: ${prizeInfo.name}` : 'Gracias por participar en Expo Investment',
+      message: prizeInfo
+        ? `🎉 ¡FELICIDADES! Has ganado: ${prizeInfo.name}`
+        : '🌎 ¡FELICIDADES! Has completado las 8 ciudades de la Expo RaizeUp. ¡Gracias por participar!',
     };
   },
 

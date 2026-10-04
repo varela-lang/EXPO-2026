@@ -81,7 +81,7 @@ export function Wallet() {
             Hola, {profile?.full_name || 'Inversionista'}
           </h1>
           <p className="text-xs sm:text-sm text-slate-400">
-            {profile?.email} • Rol: <span className="text-blue-300 font-semibold uppercase">{profile?.role || 'Visitante'}</span>
+            Visitante oficial de la Expo RaizeUp • Capital de inversión virtual asignado
           </p>
         </div>
 

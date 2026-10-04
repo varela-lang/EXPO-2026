@@ -181,15 +181,15 @@ export function Home() {
             {/* Tag */}
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-semibold mb-6">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Mercado de Capital Simulado para la Expo de Logros</span>
+              <span>Sistema Oficial • Expo RaizeUp 2026</span>
             </div>
 
             <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-white tracking-tight leading-[1.15] mb-5">
-              Invierte en el talento estudiantil con <span className="bg-gradient-to-r from-blue-400 via-sky-300 to-emerald-400 bg-clip-text text-transparent">capital virtual</span>
+              Descubre y apoya la innovación en <span className="bg-gradient-to-r from-blue-400 via-sky-300 to-emerald-400 bg-clip-text text-transparent">RaizeUp</span>
             </h1>
 
             <p className="text-sm sm:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed mb-8">
-              Cada visitante recibe <strong className="text-white font-semibold">$10,000 virtuales</strong> para respaldar los mejores proyectos universitarios y entregar <strong className="text-rose-400 font-semibold">Customer Tokens</strong> a las soluciones que usarías en tu vida diaria.
+              8 ciudades, 8 proyectos de alto impacto. Cada visitante recibe <strong className="text-white font-semibold">$10,000 virtuales</strong> para invertir en las mejores soluciones, otorgar <strong className="text-rose-400 font-semibold">Customer Tokens</strong> y sellar su pasaporte oficial.
             </p>
 
             {/* CTAs */}
@@ -197,11 +197,17 @@ export function Home() {
               {!user ? (
                 <>
                   <Link
-                    to="/registro"
+                    to="/login"
                     className="w-full sm:w-auto py-3.5 px-6 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-xl shadow-blue-600/30 flex items-center justify-center gap-2 transition-all hover:scale-[1.02]"
                   >
                     <Zap className="w-4 h-4" />
-                    Registrarme y Recibir $10,000
+                    Comenzar con mi Nombre ($10,000)
+                  </Link>
+                  <Link
+                    to="/pasaporte"
+                    className="w-full sm:w-auto py-3.5 px-6 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-semibold text-sm border border-amber-500/30 flex items-center justify-center gap-2 transition-all"
+                  >
+                    Pasaporte (8 Ciudades)
                   </Link>
                   <Link
                     to="/dashboard"
@@ -217,14 +223,20 @@ export function Home() {
                     to="/wallet"
                     className="w-full sm:w-auto py-3.5 px-6 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-xl shadow-blue-600/30 flex items-center justify-center gap-2 transition-all hover:scale-[1.02]"
                   >
-                    Ir a Mi Cartera de Inversiones
+                    Ir a Mi Cartera
                     <ArrowRight className="w-4 h-4" />
+                  </Link>
+                  <Link
+                    to="/pasaporte"
+                    className="w-full sm:w-auto py-3.5 px-6 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-semibold text-sm border border-amber-500/30 flex items-center justify-center gap-2 transition-all"
+                  >
+                    Mi Pasaporte (8 Ciudades)
                   </Link>
                   <Link
                     to="/dashboard"
                     className="w-full sm:w-auto py-3.5 px-6 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-200 font-semibold text-sm border border-white/10 flex items-center justify-center gap-2 transition-all"
                   >
-                    Ver Tablero de Pantalla Gigante
+                    Ver Tablero en Vivo
                   </Link>
                 </>
               )}
@@ -233,32 +245,32 @@ export function Home() {
             {/* Quick How it Works Pillars */}
             <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
               <div className="p-4 rounded-2xl bg-[#0D192A]/80 border border-white/5 flex items-start gap-3">
-                <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
+                <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 mt-0.5 font-bold">
                   1
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-white mb-0.5">Escanea y Regístrate</h4>
-                  <p className="text-[11px] text-slate-400">Recibe al instante tus $10,000 sin costo para actuar como inversor.</p>
+                  <h4 className="text-xs font-bold text-white mb-0.5">Ingresa con tu Nombre</h4>
+                  <p className="text-[11px] text-slate-400">Sin contraseñas ni formularios. Recibe $10,000 virtuales al instante.</p>
                 </div>
               </div>
 
               <div className="p-4 rounded-2xl bg-[#0D192A]/80 border border-white/5 flex items-start gap-3">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5 font-bold">
                   2
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-white mb-0.5">Invierte Capital</h4>
-                  <p className="text-[11px] text-slate-400">Elige proyectos prometedores y asígnales desde $100 hasta $2,500.</p>
+                  <h4 className="text-xs font-bold text-white mb-0.5">Apoya las 8 Ciudades</h4>
+                  <p className="text-[11px] text-slate-400">Invierte capital y otorga Customer Tokens a los proyectos que usarías.</p>
                 </div>
               </div>
 
               <div className="p-4 rounded-2xl bg-[#0D192A]/80 border border-white/5 flex items-start gap-3">
-                <div className="w-8 h-8 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 mt-0.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5 font-bold">
                   3
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-white mb-0.5">Otorga Customer Tokens</h4>
-                  <p className="text-[11px] text-slate-400">Valida la demanda de mercado confirmando que usarías su solución.</p>
+                  <h4 className="text-xs font-bold text-white mb-0.5">Sella tu Pasaporte</h4>
+                  <p className="text-[11px] text-slate-400">Colecciona los 8 sellos de stand para desbloquear tu Token Final.</p>
                 </div>
               </div>
             </div>
@@ -318,10 +330,10 @@ export function Home() {
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
           <div>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mb-2">
-              Proyectos de la Expo
+              8 Ciudades • 8 Proyectos de Innovación
             </h2>
             <p className="text-xs sm:text-sm text-slate-400">
-              Conoce los stands, revisa sus propuestas de valor e invierte capital virtual.
+              Cada proyecto representa una ciudad en la Expo RaizeUp. Explora sus stands, invierte capital y registra tu sello.
             </p>
           </div>
 

@@ -288,6 +288,7 @@ export function Admin() {
                 <tr>
                   <th className="py-4 px-5">Proyecto</th>
                   <th className="py-4 px-4">Equipo</th>
+                  <th className="py-4 px-4">Ciudad & Código Sello</th>
                   <th className="py-4 px-4">Categoría</th>
                   <th className="py-4 px-4 text-right">Inversión Recibida</th>
                   <th className="py-4 px-4 text-right">Inversionistas</th>
@@ -309,6 +310,15 @@ export function Admin() {
                     </td>
                     <td className="py-3.5 px-4 text-slate-300 font-medium">
                       {proj.team_name}
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span>{proj.country_code || '📍'}</span>
+                        <span className="font-semibold text-white">{proj.city || 'Ciudad'}</span>
+                      </div>
+                      <span className="font-mono text-[11px] font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/30">
+                        {proj.passport_code || 'N/A'}
+                      </span>
                     </td>
                     <td className="py-3.5 px-4">
                       <span className="px-2 py-0.5 rounded-full bg-slate-900 text-blue-300 border border-blue-400/20 text-[10px]">

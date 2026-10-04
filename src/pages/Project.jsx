@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Sparkles,
+  Lock,
 } from 'lucide-react';
 import { getProject } from '../services/projects';
 import { hasUserGivenToken } from '../services/customers';
@@ -206,6 +207,48 @@ export function Project() {
             </p>
           </div>
 
+          {project.city && (
+            <div className="mb-6 p-4 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">{project.country_code || '📍'}</span>
+                <div>
+                  <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
+                    Ciudad Oficial · Expo RaizeUp
+                  </span>
+                  <span className="text-sm sm:text-base font-bold text-white">
+                    {project.city}, {project.country}
+                  </span>
+                </div>
+              </div>
+
+              {/* Secret code visible ONLY to team members or admins */}
+              {(profile?.role === 'admin' || (profile?.role === 'team' && (!profile?.project_id || profile?.project_id === project.id))) ? (
+                <div className="flex flex-wrap items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                  <span className="text-[11px] text-amber-300 font-bold flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                    Código Stand (Solo Equipo):
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-lg bg-slate-950 text-amber-300 font-mono font-bold text-xs border border-amber-500/40">
+                    {project.passport_code}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-xs text-slate-400 flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-slate-500" />
+                    Pide el sello al equipo en su stand presencial
+                  </span>
+                  <Link
+                    to="/pasaporte"
+                    className="py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-colors"
+                  >
+                    Ver Pasaporte
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="mb-8">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
               Acerca del Proyecto
@@ -304,28 +347,21 @@ export function Project() {
               </div>
             ) : (
               /* Visitor not logged in */
-              <div className="p-6 rounded-2xl bg-slate-900 border border-white/10 text-center">
+              <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 text-center">
                 <Sparkles className="w-8 h-8 text-blue-400 mx-auto mb-2" />
                 <h4 className="text-base font-bold text-white mb-1">
-                  ¡Inicia sesión o regístrate para invertir!
+                  Ingresa tu nombre para apoyar este proyecto
                 </h4>
-                <p className="text-xs text-slate-300 max-w-md mx-auto mb-4">
-                  Recibirás <strong>$10,000 de capital virtual</strong> de inmediato para respaldar a {project.name} y entregar tu Customer Token.
+                <p className="text-xs text-slate-400 max-w-md mx-auto mb-4">
+                  Recibirás <strong className="text-emerald-400 font-mono font-medium">$10,000 virtuales</strong> para invertir en {project.name} y entregar tu Customer Token.
                 </p>
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                  <Link
-                    to="/registro"
-                    className="w-full sm:w-auto py-2.5 px-5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/30"
-                  >
-                    Registrarme y Obtener $10,000
-                  </Link>
-                  <Link
-                    to="/login"
-                    className="w-full sm:w-auto py-2.5 px-5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs border border-white/5"
-                  >
-                    Ya tengo cuenta
-                  </Link>
-                </div>
+                <Link
+                  to="/login"
+                  className="inline-flex items-center justify-center gap-2 py-3 px-6 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md transition-colors"
+                >
+                  <span>Ingresar mi nombre para participar</span>
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
               </div>
             )}
           </div>

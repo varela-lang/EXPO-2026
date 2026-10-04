@@ -104,8 +104,8 @@ export function InvestmentModal({ project, isOpen, onClose, onInvestmentSuccess 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-[#0D192A] border border-blue-500/20 shadow-2xl shadow-blue-950/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="relative w-full max-w-md max-h-[92vh] overflow-y-auto rounded-3xl bg-[#0D192A] border border-blue-500/20 shadow-2xl shadow-blue-950/50">
         {/* Header decoration */}
         <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-blue-600 via-sky-400 to-emerald-400" />
 

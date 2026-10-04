@@ -16,6 +16,8 @@ const RECENT_ACTIVITIES_KEY = 'expo_recent_activities_cache_v1';
 
 // Local in-memory event listeners
 const realtimeListeners = new Set();
+let activeSubscriberCount = 0;
+let globalSupabaseChannel = null;
 
 // Browser BroadcastChannel for instant cross-tab synchronization
 const broadcastChannel =
@@ -79,19 +81,23 @@ function recordRecentActivityCache(event) {
 
 /**
  * Central event broadcaster called whenever an investment or token is created.
- * Broadcasts across:
- * 1. Current tab listeners
- * 2. Window CustomEvent
- * 3. Cross-tab BroadcastChannel
- * 4. LocalStorage trigger
- * 5. Supabase Realtime broadcast channel (for remote devices / big screen projector)
  */
 export function broadcastDashboardEvent(type, payload) {
   // Format activity item for feed caching
   const activityItem = {
     id: payload?.id || (crypto.randomUUID ? crypto.randomUUID() : 'act-' + Date.now()),
-    type: type === 'INVESTMENT_CREATED' ? 'investment' : 'customer_token',
-    title: type === 'INVESTMENT_CREATED' ? 'NUEVA INVERSIÓN' : 'NUEVO CUSTOMER TOKEN',
+    type:
+      type === 'INVESTMENT_CREATED'
+        ? 'investment'
+        : type === 'CUSTOMER_TOKEN_CREATED'
+        ? 'customer_token'
+        : 'passport_stamp',
+    title:
+      type === 'INVESTMENT_CREATED'
+        ? 'NUEVA INVERSIÓN'
+        : type === 'CUSTOMER_TOKEN_CREATED'
+        ? 'NUEVO CUSTOMER TOKEN'
+        : 'SELLO OBTENIDO',
     amount: payload?.amount || null,
     projectName: payload?.project?.name || 'Proyecto',
     projectId: payload?.project?.id || payload?.project_id,
@@ -103,7 +109,7 @@ export function broadcastDashboardEvent(type, payload) {
   // 1. Notify listeners in the current tab
   notifyLocalListeners(type, payload);
 
-  // 2. Window CustomEvent for local React trees
+  // 2. Window CustomEvent
   if (typeof window !== 'undefined') {
     try {
       window.dispatchEvent(
@@ -123,7 +129,7 @@ export function broadcastDashboardEvent(type, payload) {
     }
   }
 
-  // 4. LocalStorage trigger as cross-tab fallback
+  // 4. LocalStorage trigger
   if (typeof window !== 'undefined') {
     try {
       localStorage.setItem(
@@ -135,11 +141,10 @@ export function broadcastDashboardEvent(type, payload) {
     }
   }
 
-  // 5. Broadcast across network to all remote devices via Supabase Realtime
-  if (isSupabaseConfigured && supabase) {
+  // 5. Broadcast across network via Supabase Realtime broadcast
+  if (isSupabaseConfigured && supabase && globalSupabaseChannel) {
     try {
-      const channel = supabase.channel('expo-dashboard-live');
-      channel.send({
+      globalSupabaseChannel.send({
         type: 'broadcast',
         event: type,
         payload,
@@ -154,59 +159,63 @@ export function broadcastDashboardEvent(type, payload) {
  * Fetch recent activity feed (investments + customer tokens)
  */
 export async function getRecentActivity(limit = 20) {
-  // Always query local mockStore activity
   const mockActivity = mockStore.getRecentActivity(limit);
 
-  // Check localStorage cache for recent events
-  let cachedActivity = [];
+  let cachedEvents = [];
   if (typeof window !== 'undefined') {
     try {
       const raw = localStorage.getItem(RECENT_ACTIVITIES_KEY);
-      if (raw) cachedActivity = JSON.parse(raw);
+      if (raw) cachedEvents = JSON.parse(raw);
     } catch {
       // ignore
     }
   }
 
   if (!isSupabaseConfigured || getSupabaseSchemaStatus() === 'missing_tables') {
-    // Combine mock activity and cached activity, deduping by id
+    const combined = [...cachedEvents, ...mockActivity];
     const seen = new Set();
-    const merged = [];
-    for (const item of [...cachedActivity, ...mockActivity]) {
-      if (item?.id && !seen.has(item.id)) {
+    const result = [];
+    for (const item of combined) {
+      if (!seen.has(item.id)) {
         seen.add(item.id);
-        merged.push(item);
+        result.push(item);
       }
     }
-    merged.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    return merged.slice(0, limit);
+    return result
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+      .slice(0, limit);
   }
 
   try {
     const [invRes, tokRes] = await Promise.all([
       supabase
         .from('investments')
-        .select('id, amount, created_at, project_id, projects(id, name)')
+        .select('id, amount, created_at, project_id, projects(id, name, team_name)')
         .order('created_at', { ascending: false })
         .limit(limit),
       supabase
         .from('customer_tokens')
-        .select('id, created_at, project_id, projects(id, name)')
+        .select('id, created_at, project_id, projects(id, name, team_name)')
         .order('created_at', { ascending: false })
         .limit(limit),
     ]);
 
-    const dbInvestments = (invRes.data || []).map((i) => ({
+    if (invRes.error && isSchemaMissingError(invRes.error)) {
+      markSupabaseSchemaMissing('getRecentActivity: ' + invRes.error.message);
+      return mockActivity;
+    }
+
+    const investments = (invRes.data || []).map((i) => ({
       id: i.id,
       type: 'investment',
       title: 'NUEVA INVERSIÓN',
-      amount: Number(i.amount),
+      amount: i.amount,
       projectName: i.projects?.name || 'Proyecto',
       projectId: i.project_id,
       timestamp: i.created_at,
     }));
 
-    const dbTokens = (tokRes.data || []).map((t) => ({
+    const tokens = (tokRes.data || []).map((t) => ({
       id: t.id,
       type: 'customer_token',
       title: 'NUEVO CUSTOMER TOKEN',
@@ -216,24 +225,28 @@ export async function getRecentActivity(limit = 20) {
       timestamp: t.created_at,
     }));
 
-    const combined = [...cachedActivity, ...dbInvestments, ...dbTokens, ...mockActivity];
-    const seen = new Set();
-    const unique = [];
-    for (const item of combined) {
-      if (item?.id && !seen.has(item.id)) {
-        seen.add(item.id);
-        unique.push(item);
+    const all = [...investments, ...tokens, ...cachedEvents, ...mockActivity];
+    const seenIds = new Set();
+    const deduped = [];
+
+    for (const item of all) {
+      if (!seenIds.has(item.id)) {
+        seenIds.add(item.id);
+        deduped.push(item);
       }
     }
 
-    unique.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    return unique.slice(0, limit);
+    deduped.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    return deduped.slice(0, limit);
   } catch (err) {
-    console.warn('Error fetching recent activity from Supabase, using local fallback:', err);
+    console.warn('Error fetching recent activity from Supabase, using mockStore:', err);
     return mockActivity;
   }
 }
 
+/**
+ * Fetch unified dashboard statistics & project rankings
+ */
 export async function getDashboardStats() {
   const mockStats = mockStore.getDashboardStats();
 
@@ -261,14 +274,21 @@ export async function getDashboardStats() {
         markSupabaseSchemaMissing('expo_stats view');
       }
 
-      const { data: invs, error: invErr } = await supabase.from('investments').select('amount, user_id');
+      const { data: invs, error: invErr } = await supabase
+        .from('investments')
+        .select('amount, user_id');
       if (invErr && isSchemaMissingError(invErr)) {
         markSupabaseSchemaMissing('investments table in stats');
         return mockStats;
       }
 
-      const { count: tokCount } = await supabase.from('customer_tokens').select('*', { count: 'exact', head: true });
-      const { count: visCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'visitor');
+      const { count: tokCount } = await supabase
+        .from('customer_tokens')
+        .select('*', { count: 'exact', head: true });
+      const { count: visCount } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .eq('role', 'visitor');
 
       const totalInvested = (invs || []).reduce((acc, i) => acc + Number(i.amount || 0), 0);
       const uniqueInvestors = new Set((invs || []).map((i) => i.user_id)).size;
@@ -311,7 +331,7 @@ export async function getDashboardStats() {
       }));
     }
 
-    // Always merge ranking with local mockStore investments to ensure live updates reflect everywhere
+    // Merge ranking with local mockStore figures to ensure instant live updates reflect everywhere
     if (mockStats) {
       if (ranking.length === 0) {
         ranking = mockStats.ranking;
@@ -339,8 +359,14 @@ export async function getDashboardStats() {
         });
       }
 
-      // Re-sort ranking strictly by investment_total DESCENDING
-      ranking.sort((a, b) => Number(b.investment_total || 0) - Number(a.investment_total || 0));
+      // Re-sort ranking strictly by investment_total DESC, then customer_tokens DESC, then investors DESC
+      ranking.sort((a, b) => {
+        const diffInvested = Number(b.investment_total || 0) - Number(a.investment_total || 0);
+        if (diffInvested !== 0) return diffInvested;
+        const diffTokens = Number(b.customer_tokens || 0) - Number(a.customer_tokens || 0);
+        if (diffTokens !== 0) return diffTokens;
+        return Number(b.investors || 0) - Number(a.investors || 0);
+      });
 
       const combinedTotal = ranking.reduce((acc, p) => acc + Number(p.investment_total || 0), 0);
       const combinedInvestors = ranking.reduce((acc, p) => acc + Number(p.investors || 0), 0);
@@ -355,7 +381,13 @@ export async function getDashboardStats() {
       };
     }
 
-    ranking.sort((a, b) => Number(b.investment_total || 0) - Number(a.investment_total || 0));
+    ranking.sort((a, b) => {
+      const diffInvested = Number(b.investment_total || 0) - Number(a.investment_total || 0);
+      if (diffInvested !== 0) return diffInvested;
+      const diffTokens = Number(b.customer_tokens || 0) - Number(a.customer_tokens || 0);
+      if (diffTokens !== 0) return diffTokens;
+      return Number(b.investors || 0) - Number(a.investors || 0);
+    });
 
     return {
       total_invested: Number(stats.total_invested || 0),
@@ -374,13 +406,117 @@ export async function getDashboardStats() {
 }
 
 /**
- * Subscribe to realtime database and bus updates for live market dashboard
+ * Singleton Supabase channel initialization
+ */
+function ensureGlobalSupabaseChannel() {
+  if (!isSupabaseConfigured || !supabase || globalSupabaseChannel) return;
+
+  try {
+    globalSupabaseChannel = supabase
+      .channel('expo-dashboard-live')
+      .on('broadcast', { event: 'INVESTMENT_CREATED' }, ({ payload }) => {
+        notifyLocalListeners('INVESTMENT_CREATED', payload);
+      })
+      .on('broadcast', { event: 'CUSTOMER_TOKEN_CREATED' }, ({ payload }) => {
+        notifyLocalListeners('CUSTOMER_TOKEN_CREATED', payload);
+      })
+      .on('broadcast', { event: 'PASSPORT_STAMP_CLAIMED' }, ({ payload }) => {
+        notifyLocalListeners('PASSPORT_STAMP_CLAIMED', payload);
+      })
+      .on('broadcast', { event: 'PROJECT_UPDATE' }, ({ payload }) => {
+        notifyLocalListeners('PROJECT_UPDATE', payload);
+      })
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'investments' },
+        async (payload) => {
+          if (payload.eventType === 'INSERT') {
+            let projectName = 'Proyecto';
+            try {
+              const { data: p } = await supabase
+                .from('projects')
+                .select('name')
+                .eq('id', payload.new.project_id)
+                .maybeSingle();
+              if (p) projectName = p.name;
+            } catch (e) {
+              // ignore
+            }
+
+            notifyLocalListeners('INVESTMENT_CREATED', {
+              type: 'investment',
+              amount: payload.new.amount,
+              project_id: payload.new.project_id,
+              project: { id: payload.new.project_id, name: projectName },
+              timestamp: payload.new.created_at,
+            });
+          } else {
+            notifyLocalListeners('METRICS_UPDATED', { table: 'investments' });
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'customer_tokens' },
+        async (payload) => {
+          if (payload.eventType === 'INSERT') {
+            let projectName = 'Proyecto';
+            try {
+              const { data: p } = await supabase
+                .from('projects')
+                .select('name')
+                .eq('id', payload.new.project_id)
+                .maybeSingle();
+              if (p) projectName = p.name;
+            } catch (e) {
+              // ignore
+            }
+
+            notifyLocalListeners('CUSTOMER_TOKEN_CREATED', {
+              type: 'customer_token',
+              project_id: payload.new.project_id,
+              project: { id: payload.new.project_id, name: projectName },
+              timestamp: payload.new.created_at,
+            });
+          } else {
+            notifyLocalListeners('METRICS_UPDATED', { table: 'customer_tokens' });
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'passport_stamps' },
+        (payload) => {
+          notifyLocalListeners('PASSPORT_STAMP_CLAIMED', payload.new);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'projects' },
+        (payload) => {
+          notifyLocalListeners('PROJECT_UPDATE', payload.new);
+        }
+      )
+      .subscribe((status, err) => {
+        if (err || status === 'CHANNEL_ERROR') {
+          console.warn('[Realtime notice] Canal Supabase estado:', status);
+        }
+      });
+  } catch (err) {
+    console.warn('Error setting up Supabase Realtime channel:', err);
+  }
+}
+
+/**
+ * Subscribe to realtime updates for live market, projects, and rankings.
+ * Uses a single shared Supabase channel to eliminate duplicates and memory leaks.
  */
 export function subscribeToDashboardRealtime(onEvent) {
-  // Always register in local bus
   realtimeListeners.add(onEvent);
+  activeSubscriberCount++;
 
-  // Always listen to mockStore state changes
+  ensureGlobalSupabaseChannel();
+
   const unsubscribeMock = subscribeToMockChanges((event, payload) => {
     onEvent({
       type: event,
@@ -388,111 +524,18 @@ export function subscribeToDashboardRealtime(onEvent) {
     });
   });
 
-  let supabaseChannel = null;
-
-  // If Supabase is configured, also listen to Supabase Realtime
-  if (isSupabaseConfigured && supabase) {
-    try {
-      supabaseChannel = supabase
-        .channel('expo-dashboard-live')
-        .on('broadcast', { event: 'INVESTMENT_CREATED' }, ({ payload }) => {
-          onEvent({
-            type: 'INVESTMENT_CREATED',
-            payload,
-          });
-        })
-        .on('broadcast', { event: 'CUSTOMER_TOKEN_CREATED' }, ({ payload }) => {
-          onEvent({
-            type: 'CUSTOMER_TOKEN_CREATED',
-            payload,
-          });
-        })
-        .on('broadcast', { event: 'PROJECT_UPDATE' }, ({ payload }) => {
-          onEvent({
-            type: 'PROJECT_UPDATE',
-            payload,
-          });
-        })
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'investments' },
-          async (payload) => {
-            let projectName = 'Proyecto';
-            try {
-              const { data: p } = await supabase
-                .from('projects')
-                .select('name')
-                .eq('id', payload.new.project_id)
-                .single();
-              if (p) projectName = p.name;
-            } catch (e) {
-              console.error(e);
-            }
-
-            onEvent({
-              type: 'INVESTMENT_CREATED',
-              payload: {
-                type: 'investment',
-                amount: payload.new.amount,
-                project_id: payload.new.project_id,
-                project: { id: payload.new.project_id, name: projectName },
-                timestamp: payload.new.created_at,
-              },
-            });
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'customer_tokens' },
-          async (payload) => {
-            let projectName = 'Proyecto';
-            try {
-              const { data: p } = await supabase
-                .from('projects')
-                .select('name')
-                .eq('id', payload.new.project_id)
-                .single();
-              if (p) projectName = p.name;
-            } catch (e) {
-              console.error(e);
-            }
-
-            onEvent({
-              type: 'CUSTOMER_TOKEN_CREATED',
-              payload: {
-                type: 'customer_token',
-                project_id: payload.new.project_id,
-                project: { id: payload.new.project_id, name: projectName },
-                timestamp: payload.new.created_at,
-              },
-            });
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'projects' },
-          (payload) => {
-            onEvent({
-              type: 'PROJECT_UPDATE',
-              payload: payload.new,
-            });
-          }
-        )
-        .subscribe((status, err) => {
-          if (err || status === 'CHANNEL_ERROR') {
-            console.warn('[Realtime notice] Canal Supabase en modo local/respaldo:', status);
-          }
-        });
-    } catch (err) {
-      console.warn('Realtime subscription error:', err);
-    }
-  }
-
   return () => {
     realtimeListeners.delete(onEvent);
+    activeSubscriberCount = Math.max(0, activeSubscriberCount - 1);
     if (unsubscribeMock) unsubscribeMock();
-    if (supabaseChannel && supabase) {
-      supabase.removeChannel(supabaseChannel);
+
+    if (activeSubscriberCount === 0 && globalSupabaseChannel && supabase) {
+      try {
+        supabase.removeChannel(globalSupabaseChannel);
+      } catch (e) {
+        // ignore
+      }
+      globalSupabaseChannel = null;
     }
   };
 }
@@ -516,7 +559,10 @@ export async function getAllVisitors() {
     }
 
     return (data || []).map((p) => {
-      const investedAmount = (p.investments || []).reduce((sum, i) => sum + Number(i.amount || 0), 0);
+      const investedAmount = (p.investments || []).reduce(
+        (sum, i) => sum + Number(i.amount || 0),
+        0
+      );
       const tokensCount = (p.customer_tokens || []).length;
       const supportedProjects = new Set((p.investments || []).map((i) => i.project_id)).size;
 
