@@ -207,6 +207,18 @@ export function Login() {
                   />
                 </div>
 
+                <div className="p-3 rounded-xl bg-blue-950/30 border border-blue-800/30 text-xs text-blue-300 space-y-1">
+                  <p className="font-bold text-white text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                    <Shield className="w-3 h-3 text-blue-400" /> Credenciales de Administrador:
+                  </p>
+                  <p className="text-slate-300 text-[11px]">
+                    Usuario: <span className="font-mono text-blue-300 select-all font-semibold">admin@expo.com</span>
+                  </p>
+                  <p className="text-slate-300 text-[11px]">
+                    Contraseña: <span className="font-mono text-blue-300 select-all font-semibold">admin123</span> (o presionar <em>Admin Demo</em> abajo)
+                  </p>
+                </div>
+
                 <button
                   type="submit"
                   disabled={loading}

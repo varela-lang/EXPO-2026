@@ -12,12 +12,29 @@ export function QRCodeGenerator({
   const [copied, setCopied] = React.useState(false);
   const containerRef = useRef(null);
 
-  // Full URL: ensure hostname is prepended if relative
-  const fullUrl = value.startsWith('http')
-    ? value
-    : typeof window !== 'undefined'
-    ? `${window.location.origin}${value}`
-    : value;
+  // Full URL: ensure hostname is prepended if relative and points to public app
+  const getCleanFullUrl = () => {
+    if (!value || typeof value !== 'string') return '';
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      return value;
+    }
+    const path = value.startsWith('/') ? value : `/${value}`;
+    if (typeof window !== 'undefined') {
+      const customBase = localStorage.getItem('expo_qr_base_url');
+      if (customBase && customBase.trim().startsWith('http')) {
+        return `${customBase.trim().replace(/\/+$/, '')}${path}`;
+      }
+      let origin = window.location.origin;
+      // If running inside AI Studio dev environment, redirect to public shared app URL
+      if (origin.includes('ais-dev-')) {
+        origin = origin.replace('ais-dev-', 'ais-pre-');
+      }
+      return `${origin}${path}`;
+    }
+    return value;
+  };
+
+  const fullUrl = getCleanFullUrl();
 
   const handleCopy = () => {
     navigator.clipboard.writeText(fullUrl);

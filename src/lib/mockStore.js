@@ -345,9 +345,16 @@ function loadState() {
         };
       });
 
-      // Guarantee that all 8 projects from INITIAL_PROJECTS are included
+      if (!Array.isArray(parsed.deletedProjectIds)) {
+        parsed.deletedProjectIds = [];
+      }
+
+      // Guarantee that all 8 projects from INITIAL_PROJECTS are included unless explicitly deleted by admin
       INITIAL_PROJECTS.forEach((initP) => {
-        if (!parsed.projects.some((p) => p.id === initP.id || p.name?.toLowerCase().trim() === initP.name?.toLowerCase().trim())) {
+        if (
+          !parsed.deletedProjectIds.includes(initP.id) &&
+          !parsed.projects.some((p) => p.id === initP.id || p.name?.toLowerCase().trim() === initP.name?.toLowerCase().trim())
+        ) {
           parsed.projects.push({ ...initP });
         }
       });
@@ -478,10 +485,34 @@ export const mockStore = {
     const state = loadState();
     const index = state.projects.findIndex((p) => p.id === id);
     if (index === -1) throw new Error('Proyecto no encontrado');
-    state.projects[index] = { ...state.projects[index], ...updates };
+    const cleanUpdates = { ...updates };
+    if (cleanUpdates.passport_code !== undefined && typeof cleanUpdates.passport_code === 'string') {
+      cleanUpdates.passport_code = cleanUpdates.passport_code.trim().toUpperCase();
+    }
+    state.projects[index] = { ...state.projects[index], ...cleanUpdates };
     saveState(state);
     notifyChange('PROJECT_UPDATE', state.projects[index]);
     return state.projects[index];
+  },
+
+  deleteProject(id) {
+    const state = loadState();
+    if (!Array.isArray(state.deletedProjectIds)) {
+      state.deletedProjectIds = [];
+    }
+    if (!state.deletedProjectIds.includes(id)) {
+      state.deletedProjectIds.push(id);
+    }
+    const index = (state.projects || []).findIndex(
+      (p) => p.id === id || String(p.id).toLowerCase() === String(id).toLowerCase()
+    );
+    let deleted = null;
+    if (index !== -1) {
+      deleted = state.projects.splice(index, 1)[0];
+    }
+    saveState(state);
+    notifyChange('PROJECT_DELETE', { id, project: deleted });
+    return deleted || { id };
   },
 
   toggleProjectActive(id, active) {
@@ -576,17 +607,43 @@ export const mockStore = {
 
   loginUser({ email, password }) {
     const state = loadState();
-    const profile = state.profiles.find((p) => p.email.toLowerCase() === email.toLowerCase());
+    const cleanEmail = (email || '').trim().toLowerCase();
+    let profile = (state.profiles || []).find((p) => p.email && p.email.toLowerCase() === cleanEmail);
 
     if (!profile) {
-      throw new Error('Credenciales inválidas. Verifica tu correo y contraseña.');
+      if (cleanEmail === 'admin@expo.com' || cleanEmail === 'admin@raizeup.com') {
+        profile = {
+          id: 'admin-demo-id',
+          full_name: 'Administrador Expo RaizeUp',
+          email: cleanEmail,
+          role: 'admin',
+          balance: 10000.0,
+          created_at: new Date().toISOString(),
+        };
+        if (!state.profiles) state.profiles = [];
+        state.profiles.push(profile);
+      } else if (cleanEmail === 'equipo@ecotech.com' || cleanEmail.startsWith('equipo@')) {
+        profile = {
+          id: 'team-demo-id',
+          full_name: 'Líder EcoTech',
+          email: cleanEmail,
+          role: 'team',
+          project_id: '00000000-0000-0000-0000-000000000001',
+          balance: 10000.0,
+          created_at: new Date().toISOString(),
+        };
+        if (!state.profiles) state.profiles = [];
+        state.profiles.push(profile);
+      } else {
+        throw new Error('Credenciales inválidas. Verifica tu correo y contraseña.');
+      }
     }
 
     if (profile.password && profile.password !== password) {
       throw new Error('Contraseña incorrecta.');
     }
 
-    state.currentUser = { id: profile.id, email: profile.email, role: profile.role };
+    state.currentUser = { id: profile.id, email: profile.email, role: profile.role, full_name: profile.full_name };
     saveState(state);
     return { user: state.currentUser, profile };
   },

@@ -232,3 +232,38 @@ export async function updateProject(id, updates) {
 export async function toggleProjectActive(id, active) {
   return updateProject(id, { active });
 }
+
+export async function deleteProject(id) {
+  let mockDeleted = null;
+  try {
+    mockDeleted = mockStore.deleteProject(id);
+  } catch (e) {
+    console.warn('mockStore deleteProject warning:', e);
+  }
+
+  if (!isSupabaseConfigured || getSupabaseSchemaStatus() === 'missing_tables') {
+    return mockDeleted || { id, success: true };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('projects')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      if (isSchemaMissingError(error)) {
+        markSupabaseSchemaMissing('deleteProject');
+        return mockDeleted;
+      }
+      throw error;
+    }
+    return { id, success: true };
+  } catch (err) {
+    if (isSchemaMissingError(err)) {
+      markSupabaseSchemaMissing('deleteProject catch');
+      return mockDeleted;
+    }
+    throw err;
+  }
+}

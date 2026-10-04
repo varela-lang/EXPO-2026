@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Sparkles,
   Lock,
+  ArrowRight,
 } from 'lucide-react';
 import { getProject } from '../services/projects';
 import { hasUserGivenToken } from '../services/customers';

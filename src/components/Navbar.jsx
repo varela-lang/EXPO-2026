@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { SupabaseModal } from './SupabaseModal';
-import { SchemaNoticeBanner } from './SchemaNoticeBanner';
 
 export function Navbar() {
   const { user, profile, logout, isSupabaseConfigured, switchDemoRole, schemaStatus } = useAuth();
@@ -42,7 +41,6 @@ export function Navbar() {
 
   return (
     <>
-      <SchemaNoticeBanner />
       <nav className="sticky top-0 z-40 w-full border-b border-white/5 bg-[#07111F]/80 backdrop-blur-xl transition-all">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
@@ -137,32 +135,6 @@ export function Navbar() {
 
             {/* Right actions */}
             <div className="hidden md:flex items-center gap-3">
-              {/* Supabase status badge */}
-              <button
-                onClick={() => setIsDbModalOpen(true)}
-                className={`text-[11px] font-medium px-2.5 py-1 rounded-xl flex items-center gap-1.5 border transition-all ${
-                  schemaStatus === 'ready'
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-                    : schemaStatus === 'missing_tables'
-                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/40 hover:bg-amber-500/25 animate-pulse'
-                    : isSupabaseConfigured
-                    ? 'bg-sky-500/10 text-sky-400 border-sky-500/30 hover:bg-sky-500/20'
-                    : 'bg-blue-500/10 text-blue-400 border-blue-500/30 hover:bg-blue-500/20'
-                }`}
-                title="Configuración de base de datos Supabase"
-              >
-                <Database className="w-3.5 h-3.5" />
-                <span>
-                  {schemaStatus === 'ready'
-                    ? 'Supabase Activo'
-                    : schemaStatus === 'missing_tables'
-                    ? 'Falta Ejecutar SQL'
-                    : isSupabaseConfigured
-                    ? 'Supabase Conectado'
-                    : 'Modo Demo'}
-                </span>
-              </button>
-
               {/* Demo role fast-switcher (available in demo mode or when schema is pending) */}
               {(!isSupabaseConfigured || schemaStatus === 'missing_tables') && (
                 <div className="relative">
@@ -335,19 +307,6 @@ export function Navbar() {
                   </Link>
                 </div>
             )}
-
-            <div className="pt-2 border-t border-white/5">
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  setIsDbModalOpen(true);
-                }}
-                className="w-full py-2 px-3 rounded-xl bg-slate-900 text-xs text-slate-400 flex items-center justify-between"
-              >
-                <span>Base de Datos: {isSupabaseConfigured ? 'Supabase Conectado' : 'Demostración Local'}</span>
-                <Database className="w-3.5 h-3.5 text-blue-400" />
-              </button>
-            </div>
           </div>
         )}
       </nav>

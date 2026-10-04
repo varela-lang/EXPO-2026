@@ -21,8 +21,19 @@ import {
   AlertCircle,
   Loader2,
   X,
+  Trash2,
+  Compass,
+  Globe,
+  Key,
+  Check,
 } from 'lucide-react';
-import { getProjects, createProject, updateProject, toggleProjectActive } from '../services/projects';
+import {
+  getProjects,
+  createProject,
+  updateProject,
+  toggleProjectActive,
+  deleteProject,
+} from '../services/projects';
 import { getAllVisitors, getDashboardStats } from '../services/dashboard';
 import { getAllInvestments } from '../services/investments';
 import { QRCodeGenerator } from '../components/QRCodeGenerator';
@@ -41,6 +52,15 @@ export function Admin() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
   const [selectedQrProject, setSelectedQrProject] = useState(null);
+  const [projectToDelete, setProjectToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [quickCodeModalProject, setQuickCodeModalProject] = useState(null);
+  const [quickCodeInput, setQuickCodeInput] = useState('');
+  const [updatingCode, setUpdatingCode] = useState(false);
+  const [customQrBaseUrl, setCustomQrBaseUrl] = useState(() => {
+    return typeof window !== 'undefined' ? localStorage.getItem('expo_qr_base_url') || '' : '';
+  });
+  const [savedBaseUrlSuccess, setSavedBaseUrlSuccess] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -48,6 +68,10 @@ export function Admin() {
     description: '',
     team_name: '',
     category: 'Tecnología',
+    city: '',
+    country: '',
+    country_code: '🌐',
+    passport_code: '',
     logo_url: '',
     active: true,
   });
@@ -85,6 +109,10 @@ export function Admin() {
       description: '',
       team_name: '',
       category: 'Tecnología',
+      city: '',
+      country: '',
+      country_code: '🌐',
+      passport_code: `EXP-${Math.floor(1000 + Math.random() * 9000)}`,
       logo_url: '',
       active: true,
     });
@@ -95,10 +123,14 @@ export function Admin() {
   const handleOpenEdit = (project) => {
     setEditingProject(project);
     setFormData({
-      name: project.name,
-      description: project.description,
-      team_name: project.team_name,
+      name: project.name || '',
+      description: project.description || '',
+      team_name: project.team_name || '',
       category: project.category || 'Tecnología',
+      city: project.city || '',
+      country: project.country || '',
+      country_code: project.country_code || '🌐',
+      passport_code: project.passport_code || '',
       logo_url: project.logo_url || '',
       active: project.active !== undefined ? project.active : true,
     });
@@ -113,14 +145,24 @@ export function Admin() {
       return;
     }
 
+    if (!formData.passport_code || !formData.passport_code.trim()) {
+      setFormError('El código de pasaporte es obligatorio para que el equipo pueda sellar.');
+      return;
+    }
+
     setSaving(true);
     setFormError(null);
 
+    const payload = {
+      ...formData,
+      passport_code: formData.passport_code.trim().toUpperCase(),
+    };
+
     try {
       if (editingProject) {
-        await updateProject(editingProject.id, formData);
+        await updateProject(editingProject.id, payload);
       } else {
-        await createProject(formData);
+        await createProject(payload);
       }
       setIsCreateModalOpen(false);
       await loadAdminData();
@@ -142,6 +184,56 @@ export function Admin() {
     } catch (err) {
       console.error('Error toggling active status:', err);
       alert('Error al cambiar el estado del proyecto');
+    }
+  };
+
+  const handleDeleteProject = (project) => {
+    setProjectToDelete(project);
+  };
+
+  const confirmDelete = async () => {
+    if (!projectToDelete) return;
+    setDeleting(true);
+    try {
+      await deleteProject(projectToDelete.id);
+      setProjects((prev) => prev.filter((p) => p.id !== projectToDelete.id));
+      setProjectToDelete(null);
+      await loadAdminData();
+    } catch (err) {
+      console.error('Error deleting team/project:', err);
+      alert('Error al eliminar el equipo: ' + (err.message || 'Error'));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleOpenQuickCode = (proj) => {
+    setQuickCodeModalProject(proj);
+    setQuickCodeInput(proj.passport_code || '');
+  };
+
+  const handleSaveQuickCode = async (e) => {
+    e.preventDefault();
+    if (!quickCodeModalProject) return;
+    const cleanCode = quickCodeInput.trim().toUpperCase();
+    if (!cleanCode) {
+      alert('El código de pasaporte no puede estar vacío.');
+      return;
+    }
+    setUpdatingCode(true);
+    try {
+      await updateProject(quickCodeModalProject.id, { passport_code: cleanCode });
+      setProjects((prev) =>
+        prev.map((p) =>
+          p.id === quickCodeModalProject.id ? { ...p, passport_code: cleanCode } : p
+        )
+      );
+      setQuickCodeModalProject(null);
+    } catch (err) {
+      console.error('Error updating passport code:', err);
+      alert('Error al actualizar el código: ' + (err.message || 'Error'));
+    } finally {
+      setUpdatingCode(false);
     }
   };
 
@@ -316,9 +408,18 @@ export function Admin() {
                         <span>{proj.country_code || '📍'}</span>
                         <span className="font-semibold text-white">{proj.city || 'Ciudad'}</span>
                       </div>
-                      <span className="font-mono text-[11px] font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/30">
-                        {proj.passport_code || 'N/A'}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-[11px] font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/30">
+                          {proj.passport_code || 'N/A'}
+                        </span>
+                        <button
+                          onClick={() => handleOpenQuickCode(proj)}
+                          className="p-1 text-slate-400 hover:text-amber-300 hover:bg-amber-500/10 rounded transition-colors"
+                          title="Modificar código de pasaporte"
+                        >
+                          <Edit className="w-3 h-3" />
+                        </button>
+                      </div>
                     </td>
                     <td className="py-3.5 px-4">
                       <span className="px-2 py-0.5 rounded-full bg-slate-900 text-blue-300 border border-blue-400/20 text-[10px]">
@@ -357,7 +458,7 @@ export function Admin() {
                         <button
                           onClick={() => handleOpenEdit(proj)}
                           className="p-1.5 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
-                          title="Editar"
+                          title="Editar información completa"
                         >
                           <Edit className="w-4 h-4" />
                         </button>
@@ -372,6 +473,13 @@ export function Admin() {
                         >
                           {proj.active ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
+                        <button
+                          onClick={() => handleDeleteProject(proj)}
+                          className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                          title="Eliminar equipo de la Expo"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -385,6 +493,46 @@ export function Admin() {
       {/* TAB 2: QR GENERATION & ENTRANCE POSTER */}
       {activeTab === 'qrs' && (
         <div className="space-y-8">
+          {/* Base URL Configuration for QRs */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-[#0D192A] border border-blue-500/20 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="max-w-xl">
+              <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                <Globe className="w-4 h-4 text-blue-400" />
+                <span>Dominio / URL Base para los Códigos QR</span>
+              </h4>
+              <p className="text-xs text-slate-400 mt-1">
+                Asegura que los visitantes puedan escanear los QR desde su celular. Por defecto se usa la URL pública compartida de la Expo. Si tienes un dominio personalizado, puedes configurarlo aquí.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 w-full md:w-auto">
+              <input
+                type="url"
+                placeholder={typeof window !== 'undefined' ? window.location.origin.replace('ais-dev-', 'ais-pre-') : 'https://...'}
+                value={customQrBaseUrl}
+                onChange={(e) => setCustomQrBaseUrl(e.target.value)}
+                className="px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white text-xs w-full md:w-80 font-mono focus:outline-none focus:border-blue-500"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    if (customQrBaseUrl.trim()) {
+                      localStorage.setItem('expo_qr_base_url', customQrBaseUrl.trim());
+                    } else {
+                      localStorage.removeItem('expo_qr_base_url');
+                    }
+                    setSavedBaseUrlSuccess(true);
+                    setTimeout(() => setSavedBaseUrlSuccess(false), 2000);
+                  }
+                }}
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shrink-0 transition-colors flex items-center gap-1.5"
+              >
+                {savedBaseUrlSuccess ? <Check className="w-3.5 h-3.5" /> : null}
+                <span>{savedBaseUrlSuccess ? 'Guardado' : 'Guardar'}</span>
+              </button>
+            </div>
+          </div>
+
           {/* General Entrance QR for Visitors */}
           <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-blue-950/40 via-[#0D192A] to-[#0D192A] border border-blue-500/30 shadow-xl flex flex-col md:flex-row items-center justify-between gap-8">
             <div className="max-w-md">
